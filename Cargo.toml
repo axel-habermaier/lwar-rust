@@ -1,0 +1,33 @@
+[package]
+authors = ["Axel Habermaier <axelhabermaier@gmail.com>"]
+edition = "2018"
+name = "orbs"
+version = "0.1.0"
+
+[dependencies]
+compiler_builtins = {version = "0.1", default-features = false, features = ["mem"]}
+winapi = {version = "0.3", default-features = false, features = [
+  "debugapi",
+  "errhandlingapi",
+  "fileapi",
+  "handleapi",
+  "heapapi",
+  "impl-default",
+  "libloaderapi",
+  "memoryapi",
+  "processthreadsapi",
+  "synchapi",
+  "winbase",
+  "wingdi",
+  "d3d11",
+  "winuser",
+]}
+
+[profile.dev]
+panic = "abort"
+
+[profile.release]
+codegen-units = 1
+debug = false
+lto = true
+panic = "abort"

@@ -1,0 +1,4 @@
+{
+    "rust-analyzer.completion.addCallArgumentSnippets": false,
+    "rust-analyzer.inlayHints.enable": false
+}
