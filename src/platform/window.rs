@@ -31,9 +31,10 @@ extern "system" fn wnd_proc(hwnd: HWND, msg: UINT, wparam: WPARAM, lparam: LPARA
 
 pub fn open_window() {
     unsafe {
+        let name = WinStr::from("WndClass");
         let wnd_class = WNDCLASSA {
             lpfnWndProc: Some(wnd_proc),
-            lpszClassName: WinStr::from("WndClass").as_ptr(),
+            lpszClassName: name.as_ptr(),
             hInstance: GetModuleHandleA(ptr::null()),
             style: CS_DBLCLKS,
             ..Default::default()
@@ -55,7 +56,7 @@ pub fn open_window() {
 
         _HWND = CreateWindowExA(
             0,
-            wnd_class.lpszClassName,
+            name.as_ptr(),
             WinStr::from("Orbs").as_ptr(),
             WS_OVERLAPPEDWINDOW | WS_VISIBLE,
             CW_USEDEFAULT,

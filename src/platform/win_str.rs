@@ -1,5 +1,4 @@
 use alloc::vec::Vec;
-use core::iter;
 
 pub struct WinStr {
     chars: Vec<i8>,
@@ -11,8 +10,8 @@ impl WinStr {
             chars: s
                 .as_bytes()
                 .iter()
-                .map(|c| *c as i8) // unsafe if the string does not consists of valid ASCII chars only
-                .chain(iter::once(0)) // append a terminating 0 to get a valid C string
+                .map(|c| *c as i8) // unsafe if the string does not consist of valid ASCII chars only
+                .chain([0]) // append a terminating 0 to get a valid C string
                 .collect(),
         }
     }
