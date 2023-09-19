@@ -3,16 +3,9 @@
 version = 3
 
 [[package]]
-name = "compiler_builtins"
-version = "0.1.43"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "65af2dcae4779003dfa91aedc6ade7bdc7ba685944e50a8b4f9380df376a4466"
-
-[[package]]
 name = "orbs"
 version = "0.1.0"
 dependencies = [
- "compiler_builtins",
  "winapi",
 ]
 

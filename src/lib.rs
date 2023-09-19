@@ -1,19 +1,15 @@
 #![warn(clippy::all)]
-#![no_std]
-#![feature(alloc_error_handler)]
 
-extern crate alloc;
 pub mod platform;
-use platform::window::*;
+use platform::window::{execute_in_window, ControlFlow, Event};
 
-pub fn run() -> ! {
-    open_window();
-    toggle_mode();
-
-    loop {
-        process_messages();
-        // panic!("Gnah");
-    }
-
-    platform::process::exit()
+pub fn run() {
+    execute_in_window(|event| {
+        println!("Event: {:?}", event);
+        if let Event::CloseRequested = event {
+            ControlFlow::Exit
+        } else {
+            ControlFlow::Continue
+        }
+    });
 }
