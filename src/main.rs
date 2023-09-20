@@ -7,25 +7,28 @@ use winapi::um::winuser::{MessageBoxA, MB_ICONERROR, MB_OK};
 
 fn main() {
     // Display a nice little message box when the app panics.
-    panic::set_hook(Box::new(|panic_info| {
+    panic::set_hook(Box::new(|panic_info| unsafe {
         let caption = CString::new("Orbs: Fatal Error").unwrap();
-        let error_message = if let Some(s) = panic_info.payload().downcast_ref::<String>() {
-            s
-        } else if let Some(s) = panic_info.payload().downcast_ref::<&str>() {
-            s
-        } else {
-            "An unknown error occurred."
+
+        let error_message = {
+            // Formatted strings such as `panic!("{}", 1)` are `String` instances.
+            if let Some(s) = panic_info.payload().downcast_ref::<String>() {
+                s
+            // Constant strings such as `panic!("") are `&str` instances.
+            } else if let Some(s) = panic_info.payload().downcast_ref::<&str>() {
+                s
+            } else {
+                "An unknown error occurred."
+            }
         };
+
         let message = CString::new(format!(
             "The application has been terminated after a fatal error.\n\nThe error was: {}",
             error_message
         ))
         .unwrap();
 
-        unsafe {
-            MessageBoxA(null_mut(), message.as_ptr(), caption.as_ptr(), MB_ICONERROR | MB_OK);
-        }
-
+        MessageBoxA(null_mut(), message.as_ptr(), caption.as_ptr(), MB_ICONERROR | MB_OK);
         exit(-1);
     }));
 

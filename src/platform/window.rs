@@ -18,18 +18,13 @@ pub enum Event {
     UpdateAndRender,
 }
 
-#[derive(Clone, Copy)]
-pub enum ControlFlow {
-    Continue,
-    Exit,
-}
-
-pub fn execute_in_window(mut event_callback: impl FnMut(&Event) -> ControlFlow) {
+pub fn execute_in_window(mut event_callback: impl FnMut(&Event, &mut bool)) {
     unsafe {
-        let control_flow = Cell::new(ControlFlow::Continue);
-        let mut handle_event = |event: &Event| match event_callback(event) {
-            ControlFlow::Continue => (),
-            ControlFlow::Exit => control_flow.set(ControlFlow::Exit),
+        let exit_cell = Cell::new(false);
+        let mut handle_event = |event: &Event| {
+            let mut exit = exit_cell.get();
+            event_callback(event, &mut exit);
+            exit_cell.set(exit);
         };
 
         let mut handle_event_ref: &mut dyn FnMut(&Event) = &mut handle_event;
@@ -37,7 +32,7 @@ pub fn execute_in_window(mut event_callback: impl FnMut(&Event) -> ControlFlow) 
 
         handle_event(&Event::Initialized);
 
-        while let ControlFlow::Continue = control_flow.get() {
+        while !exit_cell.get() {
             process_events(hwnd);
             handle_event(&Event::UpdateAndRender);
         }
