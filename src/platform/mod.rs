@@ -4,6 +4,7 @@ use winapi::um::{
     winbase::{FormatMessageW, FORMAT_MESSAGE_FROM_SYSTEM, FORMAT_MESSAGE_IGNORE_INSERTS, FORMAT_MESSAGE_MAX_WIDTH_MASK},
 };
 
+pub mod input;
 pub mod window;
 
 fn get_last_error() -> String {

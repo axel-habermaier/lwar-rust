@@ -6,12 +6,12 @@ version = "0.1.0"
 
 [dependencies]
 winapi = {version = "0.3", features = [
+  "d3d11",
   "errhandlingapi",
   "impl-default",
   "winbase",
-  "d3d11",
-  "winuser",
   "wincon",
+  "winuser",
 ]}
 
 [profile.dev]
