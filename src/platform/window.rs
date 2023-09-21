@@ -10,6 +10,8 @@ use winapi::{
     um::{libloaderapi::GetModuleHandleA, winuser::*},
 };
 
+use super::get_last_error;
+
 #[derive(Debug)]
 pub enum Event {
     Initialized,
@@ -76,7 +78,7 @@ unsafe fn open_window(event_callback: *mut c_void) -> HWND {
     };
 
     if RegisterClassA(&wnd_class) == 0 {
-        panic!("Failed to register window class.");
+        panic!("Failed to register window class. {}", get_last_error());
     }
 
     let device = RAWINPUTDEVICE {
@@ -86,7 +88,7 @@ unsafe fn open_window(event_callback: *mut c_void) -> HWND {
     };
 
     if RegisterRawInputDevices(&device, 1, size_of::<RAWINPUTDEVICE>() as u32) == 0 {
-        panic!("Failed to register raw input device.");
+        panic!("Failed to register raw input device. {}", get_last_error());
     }
 
     let hwnd = CreateWindowExA(
@@ -105,7 +107,7 @@ unsafe fn open_window(event_callback: *mut c_void) -> HWND {
     );
 
     if hwnd.is_null() {
-        panic!("Failed to create window.");
+        panic!("Failed to create window. {}", get_last_error());
     }
 
     hwnd
@@ -126,16 +128,16 @@ unsafe fn toggle_mode(hwnd: HWND) {
     if is_fullscreen {
         let style = style | WS_OVERLAPPEDWINDOW as isize;
         if SetWindowLongPtrA(hwnd, GWL_STYLE, style) == 0 {
-            panic!("Failed to set new window style.");
+            panic!("Failed to set new window style. {}", get_last_error());
         }
 
         if ShowWindow(hwnd, SW_RESTORE) == 0 {
-            panic!("Failed to restore windowed mode.");
+            panic!("Failed to restore windowed mode. {}", get_last_error());
         }
     } else {
         let style = style & !WS_OVERLAPPEDWINDOW as isize;
         if SetWindowLongPtrA(hwnd, GWL_STYLE, style) == 0 {
-            panic!("Failed to set fullscreen window style.");
+            panic!("Failed to set fullscreen window style. {}", get_last_error());
         }
 
         // We have to resize the window manually if it is maximized to get rid of the taskbar.
@@ -147,7 +149,7 @@ unsafe fn toggle_mode(hwnd: HWND) {
             };
 
             if GetMonitorInfoA(monitor, &mut monitor_info) == 0 {
-                panic!("Failed to get monitor info.");
+                panic!("Failed to get monitor info. {}", get_last_error());
             }
 
             let x = monitor_info.rcMonitor.left;
@@ -156,10 +158,10 @@ unsafe fn toggle_mode(hwnd: HWND) {
             let height = monitor_info.rcMonitor.bottom - y;
 
             if SetWindowPos(hwnd, null_mut(), x, y, width, height, SWP_FRAMECHANGED | SWP_SHOWWINDOW) == 0 {
-                panic!("Failed to change to fullscreen window style.");
+                panic!("Failed to change to fullscreen window style. {}", get_last_error());
             }
         } else if ShowWindow(hwnd, SW_SHOWMAXIMIZED) == 0 {
-            panic!("Failed to maximize fullscreen window.");
+            panic!("Failed to maximize fullscreen window. {}", get_last_error());
         }
     }
 }
