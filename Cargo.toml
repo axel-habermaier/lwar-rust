@@ -18,4 +18,5 @@ winapi = {version = "0.3", features = [
 panic = "abort"
 
 [profile.release]
+lto = true
 panic = "abort"
