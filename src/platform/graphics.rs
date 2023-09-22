@@ -22,10 +22,22 @@ pub struct GraphicsDevice {
 impl Default for GraphicsDevice {
     fn default() -> GraphicsDevice {
         unsafe {
-            let factory = ComPtr::<IDXGIFactory5>::new(
-                |factory| CreateDXGIFactory(&IDXGIFactory5::uuidof(), factory as *mut *mut c_void),
-                "Failed to create DXGI factory.",
-            );
+            //           let factory = ComPtr::<IDXGIFactory5>::new(
+            //               |factory| CreateDXGIFactory(&IDXGIFactory5::uuidof(), factory as *mut *mut c_void),
+            //               "Failed to create DXGI factory.",
+            //           );
+            //
+            //           // First, retrieve the underlying DXGI Device from the D3D Device
+            //   ComPtr<IDXGIDevice1> dxgiDevice;
+            //   DX::ThrowIfFailed(m_d3dDevice.As(&dxgiDevice));
+            //
+            //   // Identify the physical adapter (GPU or card) this device is running on.
+            //   ComPtr<IDXGIAdapter> dxgiAdapter;
+            //   DX::ThrowIfFailed(dxgiDevice->GetAdapter(dxgiAdapter.GetAddressOf()));
+            //
+            //   // And obtain the factory object that created it.
+            //   ComPtr<IDXGIFactory1> dxgiFactory;
+            //   DX::ThrowIfFailed(dxgiAdapter->GetParent(__uuidof(IDXGIFactory1), &dxgiFactory));
 
             let flags = if cfg!(debug_assertions) {
                 D3D11_CREATE_DEVICE_SINGLETHREADED | D3D11_CREATE_DEVICE_DEBUG
