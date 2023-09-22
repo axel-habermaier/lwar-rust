@@ -27,6 +27,8 @@ fn get_last_error() -> String {
         } else {
             String::from_utf16(slice::from_raw_parts(buffer.as_ptr(), length as usize))
                 .unwrap_or_else(|_| "Failed to retrieve Windows error message.".to_string())
+                .trim()
+                .to_string()
         }
     }
 }

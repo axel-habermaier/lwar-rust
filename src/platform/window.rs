@@ -1,6 +1,9 @@
+use super::{
+    get_last_error,
+    input::{Key, MouseButton},
+};
 use core::{mem::size_of, ptr};
 use std::{ffi::CString, mem::MaybeUninit, ptr::null_mut};
-
 use winapi::{
     ctypes::c_void,
     shared::{
@@ -9,9 +12,6 @@ use winapi::{
     },
     um::{libloaderapi::GetModuleHandleA, winuser::*},
 };
-
-use super::get_last_error;
-use super::input::Key;
 
 struct EventLoop<'a> {
     cursor_inside: bool,
@@ -34,11 +34,15 @@ pub enum Event {
     UpdateAndRender,
     KeyPressed(Key, u32),
     KeyReleased(Key, u32),
+    CharacterEntered(char),
     Resized(u32, u32),
     Focused(bool),
     MouseEntered,
     MouseLeft,
     MouseMoved(u32, u32),
+    MousePressed(MouseButton),
+    MouseReleased(MouseButton),
+    MouseWheel(i32),
 }
 
 pub fn execute_in_window(mut event_callback: impl FnMut(&Event, &mut bool)) {
@@ -55,15 +59,11 @@ pub fn execute_in_window(mut event_callback: impl FnMut(&Event, &mut bool)) {
         event_loop.handle_event(&Event::Initialized);
 
         while !event_loop.should_exit {
-            {
-                // Make sure we don't emit the Focused event too often, i.e., only once per change.
-                let has_focus = event_loop.has_focus;
-
-                process_events(hwnd);
-
-                if has_focus != event_loop.has_focus {
-                    event_loop.handle_event(&Event::Focused(event_loop.has_focus));
-                }
+            // Make sure we don't emit the Focused event too often, i.e., only once per change.
+            let has_focus = event_loop.has_focus;
+            process_events(hwnd);
+            if has_focus != event_loop.has_focus {
+                event_loop.handle_event(&Event::Focused(event_loop.has_focus));
             }
 
             event_loop.handle_event(&Event::UpdateAndRender);
@@ -80,7 +80,6 @@ unsafe fn open_window(event_loop: &mut EventLoop) -> HWND {
         lpfnWndProc: Some(wnd_proc),
         lpszClassName: title.as_ptr(),
         hInstance: GetModuleHandleA(ptr::null()),
-        style: CS_DBLCLKS,
         ..Default::default()
     };
 
@@ -191,7 +190,6 @@ unsafe extern "system" fn wnd_proc(hwnd: HWND, msg: UINT, wparam: WPARAM, lparam
     }
 
     let event_loop: &mut EventLoop = &mut *(event_loop_ptr as *mut EventLoop);
-    let get_mouse_position = || (LOWORD(lparam as u32) as u32, HIWORD(lparam as u32) as u32);
 
     match msg {
         WM_INPUT => handle_keyboard_input(lparam, event_loop),
@@ -202,8 +200,7 @@ unsafe extern "system" fn wnd_proc(hwnd: HWND, msg: UINT, wparam: WPARAM, lparam
         }
         WM_CLOSE => {
             event_loop.handle_event(&Event::CloseRequested);
-            // Do not forward the message to the default wnd proc,
-            // as we want full control over when the window is actually closed.
+            // Do not forward the message to the default wnd proc, as we want full control over when the window is actually closed.
             return 0;
         }
         WM_GETMINMAXINFO => {
@@ -230,86 +227,35 @@ unsafe extern "system" fn wnd_proc(hwnd: HWND, msg: UINT, wparam: WPARAM, lparam
                 event_loop.cursor_inside = true;
                 event_loop.handle_event(&Event::MouseEntered);
             } else {
-                let (x, y) = get_mouse_position();
-                event_loop.handle_event(&Event::MouseMoved(x, y));
+                event_loop.handle_event(&Event::MouseMoved(LOWORD(lparam as u32) as u32, HIWORD(lparam as u32) as u32));
             }
         }
         WM_MOUSELEAVE => {
             event_loop.cursor_inside = false;
             event_loop.handle_event(&Event::MouseLeft);
         }
-        //	case WM_LBUTTONDBLCLK:
-        //		doubleClick = true;
-        //		/* fall-through */
-        //
-        //	case WM_LBUTTONDOWN:
-        //		MousePressed(MouseButton::Left, doubleClick, getMousePosition());
-        //		break;
-        //
-        //	case WM_LBUTTONUP:
-        //		MouseReleased(MouseButton::Left, getMousePosition());
-        //		break;
-        //
-        //	case WM_RBUTTONDBLCLK:
-        //		doubleClick = true;
-        //		/* fall-through */
-        //
-        //	case WM_RBUTTONDOWN:
-        //		MousePressed(MouseButton::Right, doubleClick, getMousePosition());
-        //		break;
-        //
-        //	case WM_RBUTTONUP:
-        //		MouseReleased(MouseButton::Right, getMousePosition());
-        //		break;
-        //
-        //	case WM_MBUTTONDBLCLK:
-        //		doubleClick = true;
-        //		/* fall-through */
-        //
-        //	case WM_MBUTTONDOWN:
-        //		MousePressed(MouseButton::Middle, doubleClick, getMousePosition());
-        //		break;
-        //
-        //	case WM_MBUTTONUP:
-        //		MouseReleased(MouseButton::Middle, getMousePosition());
-        //		break;
-        //
-        //	case WM_XBUTTONDBLCLK:
-        //		doubleClick = true;
-        //		/* fall-through */
-        //
-        //	case WM_XBUTTONDOWN:
-        //		MousePressed(HIWORD(wParam) == XBUTTON1 ? MouseButton::XButton1 : MouseButton::XButton2, doubleClick, getMousePosition());
-        //		break;
-        //
-        //	case WM_XBUTTONUP:
-        //		MouseReleased(HIWORD(wParam) == XBUTTON1 ? MouseButton::XButton1 : MouseButton::XButton2, getMousePosition());
-        //		break;
-        //
-        //	case WM_MOUSEWHEEL:
-        //		MouseWheel(GET_WHEEL_DELTA_WPARAM(wParam) / 120);
-        //		break;
-        //
-        //
-        //	case WM_DEADCHAR:
-        //		// If the console key was pressed, clear the internal keyboard buffer so that the next WM_CHAR message
-        //		// is not influenced by the dead key; this important for German keyboard layouts, for instance
-        //		if (static_cast<i32>(reinterpret_cast<u8*>(&lParam)[2]) == Input::ConsoleKey)
-        //		{
-        //			BYTE keyState[256];
-        //			WCHAR buffer[8];
-        //			if (!GetKeyboardState(keyState))
-        //				PW_DIE("%s", Win32::GetError("Failed to get keyboard state.").c_str());
-        //
-        //			ToUnicode(VK_SPACE, 39, keyState, buffer, sizeof(buffer) / sizeof(WCHAR), 0);
-        //		}
-        //		break;
-        //
-        //	case WM_CHAR:
-        //		if (std::isprint(static_cast<i32>(wParam)) && wParam < 256)
-        //			CharacterEntered(static_cast<char>(wParam), static_cast<u32>(reinterpret_cast<u8*>(&lParam)[2]));
-        //		break;
-        //
+        WM_LBUTTONDOWN => event_loop.handle_event(&Event::MousePressed(MouseButton::Left)),
+        WM_LBUTTONUP => event_loop.handle_event(&Event::MouseReleased(MouseButton::Left)),
+        WM_RBUTTONDOWN => event_loop.handle_event(&Event::MousePressed(MouseButton::Right)),
+        WM_RBUTTONUP => event_loop.handle_event(&Event::MouseReleased(MouseButton::Right)),
+        WM_MBUTTONDOWN => event_loop.handle_event(&Event::MousePressed(MouseButton::Middle)),
+        WM_MBUTTONUP => event_loop.handle_event(&Event::MouseReleased(MouseButton::Middle)),
+        WM_XBUTTONDOWN => event_loop.handle_event(&Event::MousePressed(if HIWORD(wparam as u32) == XBUTTON1 {
+            MouseButton::XButton1
+        } else {
+            MouseButton::XButton2
+        })),
+        WM_XBUTTONUP => event_loop.handle_event(&Event::MouseReleased(if HIWORD(wparam as u32) == XBUTTON1 {
+            MouseButton::XButton1
+        } else {
+            MouseButton::XButton2
+        })),
+        WM_MOUSEWHEEL => event_loop.handle_event(&Event::MouseWheel((GET_WHEEL_DELTA_WPARAM(wparam) / WHEEL_DELTA) as i32)),
+        WM_CHAR => {
+            if let Some(character) = char::from_u32(wparam as u32) {
+                event_loop.handle_event(&Event::CharacterEntered(character))
+            }
+        }
         WM_SIZE => event_loop.handle_event(&Event::Resized(LOWORD(lparam as u32) as u32, HIWORD(lparam as u32) as u32)),
         _ => (),
     };
