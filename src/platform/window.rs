@@ -28,9 +28,8 @@ impl<'a> EventLoop<'a> {
 
 #[derive(Debug)]
 pub enum Event {
-    Initialized,
+    Initialized(HWND),
     CloseRequested,
-    Exiting,
     UpdateAndRender,
     KeyPressed(Key, u32),
     KeyReleased(Key, u32),
@@ -56,8 +55,6 @@ pub fn execute_in_window(mut event_callback: impl FnMut(&Event, &mut bool)) {
 
         let hwnd = open_window(&mut event_loop);
 
-        event_loop.handle_event(&Event::Initialized);
-
         while !event_loop.should_exit {
             // Make sure we don't emit the Focused event too often, i.e., only once per change.
             let has_focus = event_loop.has_focus;
@@ -68,8 +65,6 @@ pub fn execute_in_window(mut event_callback: impl FnMut(&Event, &mut bool)) {
 
             event_loop.handle_event(&Event::UpdateAndRender);
         }
-
-        event_loop.handle_event(&Event::Exiting);
     }
 }
 
@@ -192,6 +187,7 @@ unsafe extern "system" fn wnd_proc(hwnd: HWND, msg: UINT, wparam: WPARAM, lparam
     let event_loop: &mut EventLoop = &mut *(event_loop_ptr as *mut EventLoop);
 
     match msg {
+        WM_CREATE => event_loop.handle_event(&Event::Initialized(hwnd)),
         WM_INPUT => handle_keyboard_input(lparam, event_loop),
         WM_SYSCOMMAND => {
             if wparam == SC_KEYMENU {

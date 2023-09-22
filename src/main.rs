@@ -1,6 +1,7 @@
 #![warn(clippy::all)]
 #![windows_subsystem = "windows"] // Don't open up a console window when the app starts.
 
+use orbs::platform::graphics::report_d3d11_leaks;
 use std::{ffi::CString, panic, process::exit, ptr::null_mut};
 use winapi::um::wincon::{AttachConsole, ATTACH_PARENT_PROCESS};
 use winapi::um::winuser::{MessageBoxA, MB_ICONERROR, MB_OK};
@@ -38,5 +39,7 @@ fn main() {
     }
 
     orbs::run();
+
+    report_d3d11_leaks();
     exit(0);
 }

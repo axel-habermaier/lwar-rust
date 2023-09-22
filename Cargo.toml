@@ -7,10 +7,13 @@ version = "0.1.0"
 [dependencies]
 winapi = {version = "0.3", features = [
   "d3d11",
+  "dxgi1_5",
+  "dxgidebug",
   "errhandlingapi",
   "impl-default",
   "winbase",
   "wincon",
+  "winerror",
   "winuser",
 ]}
 
