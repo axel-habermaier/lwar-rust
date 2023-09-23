@@ -4,6 +4,7 @@ use std::{
     slice,
 };
 use winapi::{
+    ctypes::c_void,
     um::{
         errhandlingapi::GetLastError,
         unknwnbase::IUnknown,
@@ -56,24 +57,26 @@ struct ComPtr<T: Interface> {
 }
 
 impl<T: Interface> ComPtr<T> {
-    fn new(func: impl FnOnce(*mut *mut T) -> HRESULT, message: &str) -> ComPtr<T> {
+    fn new(func: impl FnOnce(*mut *mut T) -> HRESULT, error_message: &str) -> ComPtr<T> {
         let mut ptr: *mut T = null_mut();
         let result = func(&mut ptr);
 
         if result < 0 || ptr.is_null() {
-            panic!("{} {}", message, get_error_messag_for(result as u32))
+            panic!("{} {}", error_message, get_error_messag_for(result as u32))
         }
 
         ComPtr { ptr }
     }
 
-    fn from_raw(ptr: *mut T) -> ComPtr<T> {
-        debug_assert!(!ptr.is_null());
-        ComPtr { ptr }
+    fn as_ptr(&self) -> *mut T {
+        self.ptr
     }
 
-    fn as_ptr(&self) -> *const T {
-        self.ptr
+    fn convert<U: Interface>(&self) -> ComPtr<U> {
+        ComPtr::<U>::new(
+            |obj| unsafe { (*(self.ptr as *const IUnknown)).QueryInterface(&U::uuidof(), obj as *mut *mut c_void) },
+            "COM interface not implemented.",
+        )
     }
 }
 

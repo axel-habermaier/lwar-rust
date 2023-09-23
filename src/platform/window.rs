@@ -161,9 +161,7 @@ unsafe fn process_events(hwnd: HWND) {
 unsafe extern "system" fn wnd_proc(hwnd: HWND, msg: UINT, wparam: WPARAM, lparam: LPARAM) -> LRESULT {
     if msg == WM_CREATE {
         let event_loop_ptr = (*(lparam as *const CREATESTRUCTA)).lpCreateParams;
-        if SetWindowLongPtrA(hwnd, GWLP_USERDATA, event_loop_ptr as isize) == 0 {
-            panic!("Failed to set window user data pointer. {}", get_last_error());
-        }
+        SetWindowLongPtrA(hwnd, GWLP_USERDATA, event_loop_ptr as isize);
     }
 
     let event_loop_ptr = GetWindowLongPtrA(hwnd, GWLP_USERDATA) as *mut c_void;

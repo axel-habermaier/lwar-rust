@@ -7,11 +7,11 @@ use platform::{
 };
 
 pub fn run() {
-    let graphics_device = GraphicsDevice::default();
+    let mut graphics_device = GraphicsDevice::default();
 
     execute_in_window(|event, exit| match event {
-        Event::Initialized(hwnd) => {
-            //graphics_device = Some(GraphicsDevice::default());
+        &Event::Initialized(hwnd) => {
+            graphics_device.initialize_swap_chain(hwnd);
         }
         Event::UpdateAndRender => {}
         Event::CloseRequested => *exit = true,
