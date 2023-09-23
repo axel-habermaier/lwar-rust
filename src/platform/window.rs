@@ -3,7 +3,7 @@ use super::{
     input::{Key, MouseButton},
 };
 use core::{mem::size_of, ptr};
-use std::{ffi::CString, mem::MaybeUninit, ptr::null_mut};
+use std::{ffi::CString, mem::MaybeUninit};
 use winapi::{
     ctypes::c_void,
     shared::{
@@ -121,6 +121,10 @@ unsafe fn open_window(event_loop: &mut EventLoop) -> HWND {
 pub fn toggle_fullscreen(hwnd: HWND) {
     unsafe {
         let style = GetWindowLongPtrA(hwnd, GWL_STYLE);
+        if style == 0 {
+            panic!("Failed to retrieve Window style. {}", get_last_error());
+        }
+
         let is_fullscreen = (style & WS_THICKFRAME as isize) != WS_THICKFRAME as isize;
 
         if is_fullscreen {
@@ -129,38 +133,19 @@ pub fn toggle_fullscreen(hwnd: HWND) {
                 panic!("Failed to set new window style. {}", get_last_error());
             }
 
-            if ShowWindow(hwnd, SW_RESTORE) == 0 {
-                panic!("Failed to restore windowed mode. {}", get_last_error());
-            }
+            ShowWindow(hwnd, SW_RESTORE);
         } else {
             let style = style & !WS_OVERLAPPEDWINDOW as isize;
             if SetWindowLongPtrA(hwnd, GWL_STYLE, style) == 0 {
                 panic!("Failed to set fullscreen window style. {}", get_last_error());
             }
 
-            // We have to resize the window manually if it is maximized to get rid of the taskbar.
             if IsZoomed(hwnd) != 0 {
-                let monitor = MonitorFromWindow(hwnd, MONITOR_DEFAULTTONEAREST);
-                let mut monitor_info = MONITORINFO {
-                    cbSize: size_of::<MONITORINFO>() as u32,
-                    ..Default::default()
-                };
-
-                if GetMonitorInfoA(monitor, &mut monitor_info) == 0 {
-                    panic!("Failed to get monitor info. {}", get_last_error());
-                }
-
-                let x = monitor_info.rcMonitor.left;
-                let y = monitor_info.rcMonitor.top;
-                let width = monitor_info.rcMonitor.right - x;
-                let height = monitor_info.rcMonitor.bottom - y;
-
-                if SetWindowPos(hwnd, null_mut(), x, y, width, height, SWP_FRAMECHANGED | SWP_SHOWWINDOW) == 0 {
-                    panic!("Failed to change to fullscreen window style. {}", get_last_error());
-                }
-            } else if ShowWindow(hwnd, SW_SHOWMAXIMIZED) == 0 {
-                panic!("Failed to maximize fullscreen window. {}", get_last_error());
+                // If the Window is already maximized, we have to un-maximize it first to get rid of the taskbar.
+                ShowWindow(hwnd, SW_RESTORE);
             }
+
+            ShowWindow(hwnd, SW_SHOWMAXIMIZED);
         }
     }
 }
@@ -176,7 +161,9 @@ unsafe fn process_events(hwnd: HWND) {
 unsafe extern "system" fn wnd_proc(hwnd: HWND, msg: UINT, wparam: WPARAM, lparam: LPARAM) -> LRESULT {
     if msg == WM_CREATE {
         let event_loop_ptr = (*(lparam as *const CREATESTRUCTA)).lpCreateParams;
-        SetWindowLongPtrA(hwnd, GWLP_USERDATA, event_loop_ptr as isize);
+        if SetWindowLongPtrA(hwnd, GWLP_USERDATA, event_loop_ptr as isize) == 0 {
+            panic!("Failed to set window user data pointer. {}", get_last_error());
+        }
     }
 
     let event_loop_ptr = GetWindowLongPtrA(hwnd, GWLP_USERDATA) as *mut c_void;
@@ -189,11 +176,11 @@ unsafe extern "system" fn wnd_proc(hwnd: HWND, msg: UINT, wparam: WPARAM, lparam
     match msg {
         WM_CREATE => event_loop.handle_event(&Event::Initialized(hwnd)),
         WM_INPUT => handle_keyboard_input(lparam, event_loop),
-        WM_SYSCOMMAND => {
-            if wparam == SC_KEYMENU {
-                return 0;
-            }
+        WM_SYSCOMMAND if wparam == SC_KEYMENU => {
+            return 0;
         }
+        // Toggle fullscreen on ALT + ENTER.
+        WM_SYSKEYDOWN if wparam == VK_RETURN as usize && (lparam & 0x60000000) == 0x20000000 => toggle_fullscreen(hwnd),
         WM_CLOSE => {
             event_loop.handle_event(&Event::CloseRequested);
             // Do not forward the message to the default wnd proc, as we want full control over when the window is actually closed.
@@ -431,13 +418,8 @@ unsafe fn handle_keyboard_input(lparam: LPARAM, event_loop: &mut EventLoop) {
             VK_RIGHT => Some(if !is_e0 { Key::Numpad6 } else { Key::Right }),
             VK_UP => Some(if !is_e0 { Key::Numpad8 } else { Key::Up }),
             VK_DOWN => Some(if !is_e0 { Key::Numpad2 } else { Key::Down }),
-            VK_CLEAR => {
-                if !is_e0 {
-                    Some(Key::Numpad5)
-                } else {
-                    None
-                }
-            }
+            VK_CLEAR if !is_e0 => Some(Key::Numpad5),
+            VK_CLEAR if is_e0 => None,
             _ => translate_key(virtual_key),
         };
 
