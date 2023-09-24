@@ -3,7 +3,11 @@ use super::{
     input::{Key, MouseButton},
 };
 use core::{mem::size_of, ptr};
-use std::{ffi::CString, mem::MaybeUninit};
+use std::{
+    ffi::CString,
+    mem::MaybeUninit,
+    ptr::{null, null_mut},
+};
 use winapi::{
     ctypes::c_void,
     shared::{
@@ -13,29 +17,28 @@ use winapi::{
     um::{libloaderapi::GetModuleHandleA, winuser::*},
 };
 
-struct EventLoop<'a> {
+struct WindowData {
     cursor_inside: bool,
     has_focus: bool,
-    should_exit: bool,
-    event_callback: &'a mut dyn FnMut(&Event, &mut bool),
+    width: u32,
+    height: u32,
+    events: Vec<Event>,
+    hwnd: HWND,
 }
 
-impl<'a> EventLoop<'a> {
-    fn handle_event(&mut self, event: &Event) {
-        (self.event_callback)(event, &mut self.should_exit);
-    }
+pub struct Window {
+    data: Box<WindowData>,
+    class_name: CString,
 }
 
 #[derive(Debug)]
 pub enum Event {
-    Initialized(HWND),
     CloseRequested,
-    UpdateAndRender,
+    Resized(u32, u32),
+    Focused(bool),
     KeyPressed(Key, u32),
     KeyReleased(Key, u32),
     CharacterEntered(char),
-    Resized(u32, u32),
-    Focused(bool),
     MouseEntered,
     MouseLeft,
     MouseMoved(u32, u32),
@@ -44,143 +47,163 @@ pub enum Event {
     MouseWheel(i32),
 }
 
-pub fn execute_in_window(mut event_callback: impl FnMut(&Event, &mut bool)) {
-    unsafe {
-        let mut event_loop = EventLoop {
-            cursor_inside: false,
-            has_focus: false,
-            should_exit: false,
-            event_callback: &mut event_callback,
+impl Window {
+    pub fn new(title: &str) -> Window {
+        unsafe {
+            let title = CString::new(title).unwrap();
+
+            let wnd_class = WNDCLASSA {
+                lpfnWndProc: Some(wnd_proc),
+                lpszClassName: title.as_ptr(),
+                hInstance: GetModuleHandleA(ptr::null()),
+                ..Default::default()
+            };
+
+            if RegisterClassA(&wnd_class) == 0 {
+                panic!("Failed to register window class. {}", get_last_error());
+            }
+
+            let device = RAWINPUTDEVICE {
+                usUsagePage: 0x01, // keyboard
+                usUsage: 0x06,     // keyboard
+                ..Default::default()
+            };
+
+            if RegisterRawInputDevices(&device, 1, size_of::<RAWINPUTDEVICE>() as u32) == 0 {
+                panic!("Failed to register raw input device. {}", get_last_error());
+            };
+
+            let mut data = Box::new(WindowData {
+                cursor_inside: false,
+                has_focus: false,
+                width: 0,
+                height: 0,
+                events: Vec::with_capacity(32),
+                hwnd: null_mut(),
+            });
+
+            data.hwnd = CreateWindowExA(
+                0,
+                title.as_ptr(),
+                title.as_ptr(),
+                WS_OVERLAPPEDWINDOW | WS_VISIBLE,
+                CW_USEDEFAULT,
+                CW_USEDEFAULT,
+                CW_USEDEFAULT,
+                CW_USEDEFAULT,
+                ptr::null_mut(),
+                ptr::null_mut(),
+                GetModuleHandleA(ptr::null()),
+                &mut *data as *mut _ as *mut c_void,
+            );
+
+            if data.hwnd.is_null() {
+                panic!("Failed to create window. {}", get_last_error());
+            }
+
+            if !cfg!(debug_assertions) {
+                toggle_fullscreen(data.hwnd);
+            }
+
+            Window { data, class_name: title }
+        }
+    }
+
+    pub fn pending_events(&mut self) -> impl Iterator<Item = &Event> {
+        self.data.events.clear();
+        let width = self.data.width;
+        let height = self.data.height;
+        let has_focus = self.data.has_focus;
+
+        unsafe {
+            let mut msg: MSG = Default::default();
+            while PeekMessageA(&mut msg, null_mut(), 0, 0, PM_REMOVE) != 0 {
+                TranslateMessage(&msg);
+                DispatchMessageA(&msg);
+            }
+        }
+
+        if has_focus != self.data.has_focus {
+            self.data.events.push(Event::Focused(self.data.has_focus));
+        }
+
+        if width != self.data.width || height != self.data.height {
+            self.data.events.push(Event::Resized(self.data.width, self.data.height));
+        }
+
+        self.data.events.iter()
+    }
+
+    pub fn hwnd(&self) -> HWND {
+        self.data.hwnd
+    }
+
+    pub fn size(&self) -> (u32, u32) {
+        (self.data.width, self.data.height)
+    }
+}
+
+impl Drop for Window {
+    fn drop(&mut self) {
+        unsafe {
+            CloseWindow(self.data.hwnd);
+            UnregisterClassA(self.class_name.as_ptr(), GetModuleHandleA(null()));
         };
-
-        let hwnd = open_window(&mut event_loop);
-
-        while !event_loop.should_exit {
-            // Make sure we don't emit the Focused event too often, i.e., only once per change.
-            let has_focus = event_loop.has_focus;
-            process_events(hwnd);
-            if has_focus != event_loop.has_focus {
-                event_loop.handle_event(&Event::Focused(event_loop.has_focus));
-            }
-
-            event_loop.handle_event(&Event::UpdateAndRender);
-        }
     }
 }
 
-unsafe fn open_window(event_loop: &mut EventLoop) -> HWND {
-    let title = CString::new("Orbs").unwrap();
-
-    let wnd_class = WNDCLASSA {
-        lpfnWndProc: Some(wnd_proc),
-        lpszClassName: title.as_ptr(),
-        hInstance: GetModuleHandleA(ptr::null()),
-        ..Default::default()
-    };
-
-    if RegisterClassA(&wnd_class) == 0 {
-        panic!("Failed to register window class. {}", get_last_error());
+unsafe fn toggle_fullscreen(hwnd: HWND) {
+    let style = GetWindowLongPtrA(hwnd, GWL_STYLE);
+    if style == 0 {
+        panic!("Failed to retrieve Window style. {}", get_last_error());
     }
 
-    let device = RAWINPUTDEVICE {
-        usUsagePage: 0x01, // keyboard
-        usUsage: 0x06,     // keyboard
-        ..Default::default()
-    };
+    let is_fullscreen = (style & WS_THICKFRAME as isize) != WS_THICKFRAME as isize;
 
-    if RegisterRawInputDevices(&device, 1, size_of::<RAWINPUTDEVICE>() as u32) == 0 {
-        panic!("Failed to register raw input device. {}", get_last_error());
-    }
-
-    let hwnd = CreateWindowExA(
-        0,
-        title.as_ptr(),
-        title.as_ptr(),
-        WS_OVERLAPPEDWINDOW | WS_VISIBLE,
-        CW_USEDEFAULT,
-        CW_USEDEFAULT,
-        CW_USEDEFAULT,
-        CW_USEDEFAULT,
-        ptr::null_mut(),
-        ptr::null_mut(),
-        GetModuleHandleA(ptr::null()),
-        event_loop as *mut _ as *mut c_void,
-    );
-
-    if hwnd.is_null() {
-        panic!("Failed to create window. {}", get_last_error());
-    }
-
-    if !cfg!(debug_assertions) {
-        toggle_fullscreen(hwnd);
-    }
-
-    hwnd
-}
-
-pub fn toggle_fullscreen(hwnd: HWND) {
-    unsafe {
-        let style = GetWindowLongPtrA(hwnd, GWL_STYLE);
-        if style == 0 {
-            panic!("Failed to retrieve Window style. {}", get_last_error());
+    if is_fullscreen {
+        let style = style | WS_OVERLAPPEDWINDOW as isize;
+        if SetWindowLongPtrA(hwnd, GWL_STYLE, style) == 0 {
+            panic!("Failed to set new window style. {}", get_last_error());
         }
 
-        let is_fullscreen = (style & WS_THICKFRAME as isize) != WS_THICKFRAME as isize;
+        ShowWindow(hwnd, SW_RESTORE);
+    } else {
+        let style = style & !WS_OVERLAPPEDWINDOW as isize;
+        if SetWindowLongPtrA(hwnd, GWL_STYLE, style) == 0 {
+            panic!("Failed to set fullscreen window style. {}", get_last_error());
+        }
 
-        if is_fullscreen {
-            let style = style | WS_OVERLAPPEDWINDOW as isize;
-            if SetWindowLongPtrA(hwnd, GWL_STYLE, style) == 0 {
-                panic!("Failed to set new window style. {}", get_last_error());
-            }
-
+        if IsZoomed(hwnd) != 0 {
+            // If the Window is already maximized, we have to un-maximize it first to get rid of the taskbar.
             ShowWindow(hwnd, SW_RESTORE);
-        } else {
-            let style = style & !WS_OVERLAPPEDWINDOW as isize;
-            if SetWindowLongPtrA(hwnd, GWL_STYLE, style) == 0 {
-                panic!("Failed to set fullscreen window style. {}", get_last_error());
-            }
-
-            if IsZoomed(hwnd) != 0 {
-                // If the Window is already maximized, we have to un-maximize it first to get rid of the taskbar.
-                ShowWindow(hwnd, SW_RESTORE);
-            }
-
-            ShowWindow(hwnd, SW_SHOWMAXIMIZED);
         }
-    }
-}
 
-unsafe fn process_events(hwnd: HWND) {
-    let mut msg: MSG = Default::default();
-    while PeekMessageA(&mut msg, hwnd, 0, 0, PM_REMOVE) != 0 {
-        TranslateMessage(&msg);
-        DispatchMessageA(&msg);
+        ShowWindow(hwnd, SW_SHOWMAXIMIZED);
     }
 }
 
 unsafe extern "system" fn wnd_proc(hwnd: HWND, msg: UINT, wparam: WPARAM, lparam: LPARAM) -> LRESULT {
     if msg == WM_CREATE {
-        let event_loop_ptr = (*(lparam as *const CREATESTRUCTA)).lpCreateParams;
-        SetWindowLongPtrA(hwnd, GWLP_USERDATA, event_loop_ptr as isize);
+        let data_ptr = (*(lparam as *const CREATESTRUCTA)).lpCreateParams;
+        SetWindowLongPtrA(hwnd, GWLP_USERDATA, data_ptr as isize);
     }
 
-    let event_loop_ptr = GetWindowLongPtrA(hwnd, GWLP_USERDATA) as *mut c_void;
-    if event_loop_ptr.is_null() {
+    let data_ptr = GetWindowLongPtrA(hwnd, GWLP_USERDATA) as *mut c_void;
+    if data_ptr.is_null() {
         return DefWindowProcA(hwnd, msg, wparam, lparam);
     }
 
-    let event_loop: &mut EventLoop = &mut *(event_loop_ptr as *mut EventLoop);
+    let data: &mut WindowData = &mut *(data_ptr as *mut WindowData);
 
     match msg {
-        WM_CREATE => event_loop.handle_event(&Event::Initialized(hwnd)),
-        WM_INPUT => handle_keyboard_input(lparam, event_loop),
+        WM_INPUT => handle_keyboard_input(lparam, &mut data.events),
         WM_SYSCOMMAND if wparam == SC_KEYMENU => {
             return 0;
         }
         // Toggle fullscreen on ALT + ENTER.
         WM_SYSKEYDOWN if wparam == VK_RETURN as usize && (lparam & 0x60000000) == 0x20000000 => toggle_fullscreen(hwnd),
         WM_CLOSE => {
-            event_loop.handle_event(&Event::CloseRequested);
+            data.events.push(Event::CloseRequested);
             // Do not forward the message to the default wnd proc, as we want full control over when the window is actually closed.
             return 0;
         }
@@ -191,12 +214,12 @@ unsafe extern "system" fn wnd_proc(hwnd: HWND, msg: UINT, wparam: WPARAM, lparam
             (*info).ptMinTrackSize.y = 400;
         }
         // Check WM_ACTIVATE, WM_NCACTIVATE, WM_ACTIVATEAPP in order to ensure that we do not miss an activation or deactivation.
-        WM_ACTIVATE => event_loop.has_focus = LOWORD(wparam as u32) != WA_INACTIVE,
-        WM_NCACTIVATE | WM_ACTIVATEAPP => event_loop.has_focus = wparam != 0,
+        WM_ACTIVATE => data.has_focus = LOWORD(wparam as u32) != WA_INACTIVE,
+        WM_NCACTIVATE | WM_ACTIVATEAPP => data.has_focus = wparam != 0,
         WM_MOUSEMOVE => {
             // If the cursor is entering the window, raise the mouse entered event and tell Windows to inform
             // us when the cursor leaves the window.
-            if !event_loop.cursor_inside {
+            if !data.cursor_inside {
                 let mut mouse_event = TRACKMOUSEEVENT {
                     cbSize: size_of::<TRACKMOUSEEVENT>() as u32,
                     hwndTrack: hwnd,
@@ -205,39 +228,42 @@ unsafe extern "system" fn wnd_proc(hwnd: HWND, msg: UINT, wparam: WPARAM, lparam
                 };
                 TrackMouseEvent(&mut mouse_event);
 
-                event_loop.cursor_inside = true;
-                event_loop.handle_event(&Event::MouseEntered);
+                data.cursor_inside = true;
+                data.events.push(Event::MouseEntered);
             } else {
-                event_loop.handle_event(&Event::MouseMoved(LOWORD(lparam as u32) as u32, HIWORD(lparam as u32) as u32));
+                data.events.push(Event::MouseMoved(LOWORD(lparam as u32) as u32, HIWORD(lparam as u32) as u32));
             }
         }
         WM_MOUSELEAVE => {
-            event_loop.cursor_inside = false;
-            event_loop.handle_event(&Event::MouseLeft);
+            data.cursor_inside = false;
+            data.events.push(Event::MouseLeft);
         }
-        WM_LBUTTONDOWN => event_loop.handle_event(&Event::MousePressed(MouseButton::Left)),
-        WM_LBUTTONUP => event_loop.handle_event(&Event::MouseReleased(MouseButton::Left)),
-        WM_RBUTTONDOWN => event_loop.handle_event(&Event::MousePressed(MouseButton::Right)),
-        WM_RBUTTONUP => event_loop.handle_event(&Event::MouseReleased(MouseButton::Right)),
-        WM_MBUTTONDOWN => event_loop.handle_event(&Event::MousePressed(MouseButton::Middle)),
-        WM_MBUTTONUP => event_loop.handle_event(&Event::MouseReleased(MouseButton::Middle)),
-        WM_XBUTTONDOWN => event_loop.handle_event(&Event::MousePressed(if HIWORD(wparam as u32) == XBUTTON1 {
+        WM_LBUTTONDOWN => data.events.push(Event::MousePressed(MouseButton::Left)),
+        WM_LBUTTONUP => data.events.push(Event::MouseReleased(MouseButton::Left)),
+        WM_RBUTTONDOWN => data.events.push(Event::MousePressed(MouseButton::Right)),
+        WM_RBUTTONUP => data.events.push(Event::MouseReleased(MouseButton::Right)),
+        WM_MBUTTONDOWN => data.events.push(Event::MousePressed(MouseButton::Middle)),
+        WM_MBUTTONUP => data.events.push(Event::MouseReleased(MouseButton::Middle)),
+        WM_XBUTTONDOWN => data.events.push(Event::MousePressed(if HIWORD(wparam as u32) == XBUTTON1 {
             MouseButton::XButton1
         } else {
             MouseButton::XButton2
         })),
-        WM_XBUTTONUP => event_loop.handle_event(&Event::MouseReleased(if HIWORD(wparam as u32) == XBUTTON1 {
+        WM_XBUTTONUP => data.events.push(Event::MouseReleased(if HIWORD(wparam as u32) == XBUTTON1 {
             MouseButton::XButton1
         } else {
             MouseButton::XButton2
         })),
-        WM_MOUSEWHEEL => event_loop.handle_event(&Event::MouseWheel((GET_WHEEL_DELTA_WPARAM(wparam) / WHEEL_DELTA) as i32)),
+        WM_MOUSEWHEEL => data.events.push(Event::MouseWheel((GET_WHEEL_DELTA_WPARAM(wparam) / WHEEL_DELTA) as i32)),
         WM_CHAR => {
             if let Some(character) = char::from_u32(wparam as u32) {
-                event_loop.handle_event(&Event::CharacterEntered(character))
+                data.events.push(Event::CharacterEntered(character))
             }
         }
-        WM_SIZE => event_loop.handle_event(&Event::Resized(LOWORD(lparam as u32) as u32, HIWORD(lparam as u32) as u32)),
+        WM_SIZE => {
+            data.width = LOWORD(lparam as u32) as u32;
+            data.height = HIWORD(lparam as u32) as u32;
+        }
         _ => (),
     };
 
@@ -356,7 +382,7 @@ fn translate_key(virtual_key: i32) -> Option<Key> {
     }
 }
 
-unsafe fn handle_keyboard_input(lparam: LPARAM, event_loop: &mut EventLoop) {
+unsafe fn handle_keyboard_input(lparam: LPARAM, events: &mut Vec<Event>) {
     let mut input = MaybeUninit::<RAWINPUT>::uninit();
     let mut size = size_of::<RAWINPUT>() as u32;
     let success = GetRawInputData(
@@ -423,9 +449,9 @@ unsafe fn handle_keyboard_input(lparam: LPARAM, event_loop: &mut EventLoop) {
 
         if let Some(key) = key {
             if released {
-                event_loop.handle_event(&Event::KeyReleased(key, scan_code));
+                events.push(Event::KeyReleased(key, scan_code));
             } else {
-                event_loop.handle_event(&Event::KeyPressed(key, scan_code));
+                events.push(Event::KeyPressed(key, scan_code));
             }
         }
     }
