@@ -6,6 +6,7 @@ use core::{mem::size_of, ptr};
 use std::{
     ffi::CString,
     mem::MaybeUninit,
+    pin::Pin,
     ptr::{null, null_mut},
 };
 use winapi::{
@@ -17,17 +18,13 @@ use winapi::{
     um::{libloaderapi::GetModuleHandleA, winuser::*},
 };
 
-struct WindowData {
+pub struct Window {
     cursor_inside: bool,
     has_focus: bool,
     width: u32,
     height: u32,
     events: Vec<Event>,
     hwnd: HWND,
-}
-
-pub struct Window {
-    data: Box<WindowData>,
     class_name: CString,
 }
 
@@ -48,13 +45,13 @@ pub enum Event {
 }
 
 impl Window {
-    pub fn new(title: &str) -> Window {
+    pub fn new(title: &str) -> Pin<Box<Window>> {
         unsafe {
-            let title = CString::new(title).unwrap();
+            let class_name = CString::new(title).unwrap();
 
             let wnd_class = WNDCLASSA {
                 lpfnWndProc: Some(wnd_proc),
-                lpszClassName: title.as_ptr(),
+                lpszClassName: class_name.as_ptr(),
                 hInstance: GetModuleHandleA(ptr::null()),
                 ..Default::default()
             };
@@ -73,19 +70,20 @@ impl Window {
                 panic!("Failed to register raw input device. {}", get_last_error());
             };
 
-            let mut data = Box::new(WindowData {
+            let mut window = Pin::new(Box::new(Window {
                 cursor_inside: false,
                 has_focus: false,
                 width: 0,
                 height: 0,
                 events: Vec::with_capacity(32),
+                class_name: class_name.clone(),
                 hwnd: null_mut(),
-            });
+            }));
 
-            data.hwnd = CreateWindowExA(
+            window.hwnd = CreateWindowExA(
                 0,
-                title.as_ptr(),
-                title.as_ptr(),
+                class_name.as_ptr(),
+                class_name.as_ptr(),
                 WS_OVERLAPPEDWINDOW | WS_VISIBLE,
                 CW_USEDEFAULT,
                 CW_USEDEFAULT,
@@ -94,26 +92,26 @@ impl Window {
                 ptr::null_mut(),
                 ptr::null_mut(),
                 GetModuleHandleA(ptr::null()),
-                &mut *data as *mut _ as *mut c_void,
+                &mut *window as *mut _ as _,
             );
 
-            if data.hwnd.is_null() {
+            if window.hwnd.is_null() {
                 panic!("Failed to create window. {}", get_last_error());
             }
 
             if !cfg!(debug_assertions) {
-                toggle_fullscreen(data.hwnd);
+                toggle_fullscreen(window.hwnd);
             }
 
-            Window { data, class_name: title }
+            window
         }
     }
 
     pub fn pending_events(&mut self) -> impl Iterator<Item = &Event> {
-        self.data.events.clear();
-        let width = self.data.width;
-        let height = self.data.height;
-        let has_focus = self.data.has_focus;
+        self.events.clear();
+        let width = self.width;
+        let height = self.height;
+        let has_focus = self.has_focus;
 
         unsafe {
             let mut msg: MSG = Default::default();
@@ -123,30 +121,30 @@ impl Window {
             }
         }
 
-        if has_focus != self.data.has_focus {
-            self.data.events.push(Event::Focused(self.data.has_focus));
+        if has_focus != self.has_focus {
+            self.events.push(Event::Focused(self.has_focus));
         }
 
-        if width != self.data.width || height != self.data.height {
-            self.data.events.push(Event::Resized(self.data.width, self.data.height));
+        if width != self.width || height != self.height {
+            self.events.push(Event::Resized(self.width, self.height));
         }
 
-        self.data.events.iter()
+        self.events.iter()
     }
 
     pub fn hwnd(&self) -> HWND {
-        self.data.hwnd
+        self.hwnd
     }
 
     pub fn size(&self) -> (u32, u32) {
-        (self.data.width, self.data.height)
+        (self.width, self.height)
     }
 }
 
 impl Drop for Window {
     fn drop(&mut self) {
         unsafe {
-            CloseWindow(self.data.hwnd);
+            CloseWindow(self.hwnd);
             UnregisterClassA(self.class_name.as_ptr(), GetModuleHandleA(null()));
         };
     }
@@ -188,22 +186,22 @@ unsafe extern "system" fn wnd_proc(hwnd: HWND, msg: UINT, wparam: WPARAM, lparam
         SetWindowLongPtrA(hwnd, GWLP_USERDATA, data_ptr as isize);
     }
 
-    let data_ptr = GetWindowLongPtrA(hwnd, GWLP_USERDATA) as *mut c_void;
-    if data_ptr.is_null() {
+    let window_ptr = GetWindowLongPtrA(hwnd, GWLP_USERDATA) as *mut c_void;
+    if window_ptr.is_null() {
         return DefWindowProcA(hwnd, msg, wparam, lparam);
     }
 
-    let data: &mut WindowData = &mut *(data_ptr as *mut WindowData);
+    let window: &mut Window = &mut *(window_ptr as *mut Window);
 
     match msg {
-        WM_INPUT => handle_keyboard_input(lparam, &mut data.events),
+        WM_INPUT => handle_keyboard_input(lparam, &mut window.events),
         WM_SYSCOMMAND if wparam == SC_KEYMENU => {
             return 0;
         }
         // Toggle fullscreen on ALT + ENTER.
         WM_SYSKEYDOWN if wparam == VK_RETURN as usize && (lparam & 0x60000000) == 0x20000000 => toggle_fullscreen(hwnd),
         WM_CLOSE => {
-            data.events.push(Event::CloseRequested);
+            window.events.push(Event::CloseRequested);
             // Do not forward the message to the default wnd proc, as we want full control over when the window is actually closed.
             return 0;
         }
@@ -214,12 +212,12 @@ unsafe extern "system" fn wnd_proc(hwnd: HWND, msg: UINT, wparam: WPARAM, lparam
             (*info).ptMinTrackSize.y = 400;
         }
         // Check WM_ACTIVATE, WM_NCACTIVATE, WM_ACTIVATEAPP in order to ensure that we do not miss an activation or deactivation.
-        WM_ACTIVATE => data.has_focus = LOWORD(wparam as u32) != WA_INACTIVE,
-        WM_NCACTIVATE | WM_ACTIVATEAPP => data.has_focus = wparam != 0,
+        WM_ACTIVATE => window.has_focus = LOWORD(wparam as u32) != WA_INACTIVE,
+        WM_NCACTIVATE | WM_ACTIVATEAPP => window.has_focus = wparam != 0,
         WM_MOUSEMOVE => {
             // If the cursor is entering the window, raise the mouse entered event and tell Windows to inform
             // us when the cursor leaves the window.
-            if !data.cursor_inside {
+            if !window.cursor_inside {
                 let mut mouse_event = TRACKMOUSEEVENT {
                     cbSize: size_of::<TRACKMOUSEEVENT>() as u32,
                     hwndTrack: hwnd,
@@ -228,41 +226,41 @@ unsafe extern "system" fn wnd_proc(hwnd: HWND, msg: UINT, wparam: WPARAM, lparam
                 };
                 TrackMouseEvent(&mut mouse_event);
 
-                data.cursor_inside = true;
-                data.events.push(Event::MouseEntered);
+                window.cursor_inside = true;
+                window.events.push(Event::MouseEntered);
             } else {
-                data.events.push(Event::MouseMoved(LOWORD(lparam as u32) as u32, HIWORD(lparam as u32) as u32));
+                window.events.push(Event::MouseMoved(LOWORD(lparam as u32) as u32, HIWORD(lparam as u32) as u32));
             }
         }
         WM_MOUSELEAVE => {
-            data.cursor_inside = false;
-            data.events.push(Event::MouseLeft);
+            window.cursor_inside = false;
+            window.events.push(Event::MouseLeft);
         }
-        WM_LBUTTONDOWN => data.events.push(Event::MousePressed(MouseButton::Left)),
-        WM_LBUTTONUP => data.events.push(Event::MouseReleased(MouseButton::Left)),
-        WM_RBUTTONDOWN => data.events.push(Event::MousePressed(MouseButton::Right)),
-        WM_RBUTTONUP => data.events.push(Event::MouseReleased(MouseButton::Right)),
-        WM_MBUTTONDOWN => data.events.push(Event::MousePressed(MouseButton::Middle)),
-        WM_MBUTTONUP => data.events.push(Event::MouseReleased(MouseButton::Middle)),
-        WM_XBUTTONDOWN => data.events.push(Event::MousePressed(if HIWORD(wparam as u32) == XBUTTON1 {
+        WM_LBUTTONDOWN => window.events.push(Event::MousePressed(MouseButton::Left)),
+        WM_LBUTTONUP => window.events.push(Event::MouseReleased(MouseButton::Left)),
+        WM_RBUTTONDOWN => window.events.push(Event::MousePressed(MouseButton::Right)),
+        WM_RBUTTONUP => window.events.push(Event::MouseReleased(MouseButton::Right)),
+        WM_MBUTTONDOWN => window.events.push(Event::MousePressed(MouseButton::Middle)),
+        WM_MBUTTONUP => window.events.push(Event::MouseReleased(MouseButton::Middle)),
+        WM_XBUTTONDOWN => window.events.push(Event::MousePressed(if HIWORD(wparam as u32) == XBUTTON1 {
             MouseButton::XButton1
         } else {
             MouseButton::XButton2
         })),
-        WM_XBUTTONUP => data.events.push(Event::MouseReleased(if HIWORD(wparam as u32) == XBUTTON1 {
+        WM_XBUTTONUP => window.events.push(Event::MouseReleased(if HIWORD(wparam as u32) == XBUTTON1 {
             MouseButton::XButton1
         } else {
             MouseButton::XButton2
         })),
-        WM_MOUSEWHEEL => data.events.push(Event::MouseWheel((GET_WHEEL_DELTA_WPARAM(wparam) / WHEEL_DELTA) as i32)),
+        WM_MOUSEWHEEL => window.events.push(Event::MouseWheel((GET_WHEEL_DELTA_WPARAM(wparam) / WHEEL_DELTA) as i32)),
         WM_CHAR => {
             if let Some(character) = char::from_u32(wparam as u32) {
-                data.events.push(Event::CharacterEntered(character))
+                window.events.push(Event::CharacterEntered(character))
             }
         }
         WM_SIZE => {
-            data.width = LOWORD(lparam as u32) as u32;
-            data.height = HIWORD(lparam as u32) as u32;
+            window.width = LOWORD(lparam as u32) as u32;
+            window.height = HIWORD(lparam as u32) as u32;
         }
         _ => (),
     };
@@ -388,7 +386,7 @@ unsafe fn handle_keyboard_input(lparam: LPARAM, events: &mut Vec<Event>) {
     let success = GetRawInputData(
         lparam as HRAWINPUT,
         RID_INPUT,
-        input.as_mut_ptr() as *mut c_void,
+        input.as_mut_ptr() as *mut _,
         &mut size as *mut _,
         size_of::<RAWINPUTHEADER>() as u32,
     );
