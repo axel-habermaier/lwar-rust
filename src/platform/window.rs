@@ -1,5 +1,5 @@
 use super::{
-    get_last_error,
+    error::get_last_error,
     input::{Key, MouseButton},
 };
 use core::{mem::size_of, ptr};

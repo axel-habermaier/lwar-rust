@@ -1,37 +1,14 @@
 #![warn(clippy::all)]
 #![windows_subsystem = "windows"] // Don't open up a console window when the app starts.
 
+use std::process::exit;
+
+use orbs::platform::error::setup_panic_handler;
 use orbs::platform::graphics::report_d3d11_leaks;
-use std::{ffi::CString, panic, process::exit, ptr::null_mut};
 use winapi::um::wincon::{AttachConsole, ATTACH_PARENT_PROCESS};
-use winapi::um::winuser::{MessageBoxA, MB_ICONERROR, MB_OK};
 
 fn main() {
-    // Display a nice little message box when the app panics.
-    panic::set_hook(Box::new(|panic_info| unsafe {
-        let caption = CString::new("Orbs: Fatal Error").unwrap();
-
-        let error_message = {
-            // Formatted strings such as `panic!("{}", 1)` are `String` instances.
-            if let Some(s) = panic_info.payload().downcast_ref::<String>() {
-                s
-            // Constant strings such as `panic!("") are `&str` instances.
-            } else if let Some(s) = panic_info.payload().downcast_ref::<&str>() {
-                s
-            } else {
-                "An unknown error occurred."
-            }
-        };
-
-        let message = CString::new(format!(
-            "The application has been terminated after a fatal error.\n\nThe error was: {}",
-            error_message
-        ))
-        .unwrap();
-
-        MessageBoxA(null_mut(), message.as_ptr(), caption.as_ptr(), MB_ICONERROR | MB_OK);
-        exit(-1);
-    }));
+    setup_panic_handler();
 
     // Try to attach to the parent console so that we get log output to stdout when starting the app from the command line.
     unsafe {

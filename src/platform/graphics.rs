@@ -1,4 +1,4 @@
-use super::{get_error_messag_for, ComPtr};
+use super::{com_ptr::ComPtr, error::get_error_messag_for};
 use std::ptr::{null, null_mut};
 use winapi::{
     ctypes::c_void,
@@ -18,9 +18,9 @@ use winapi::{
 pub struct GraphicsDevice {
     device: ComPtr<ID3D11Device>,
     context: ComPtr<ID3D11DeviceContext>,
-    swap_chain: Option<ComPtr<IDXGISwapChain1>>,
-    back_buffer: Option<ComPtr<ID3D11RenderTargetView>>,
-    hwnd: Option<HWND>,
+    swap_chain: ComPtr<IDXGISwapChain1>,
+    back_buffer: ComPtr<ID3D11RenderTargetView>,
+    hwnd: HWND,
     size: (u32, u32),
 }
 
@@ -75,9 +75,9 @@ impl Default for GraphicsDevice {
         GraphicsDevice {
             device,
             context,
-            swap_chain: None,
-            hwnd: None,
-            back_buffer: None,
+            swap_chain: ComPtr::null(),
+            hwnd: null_mut(),
+            back_buffer: ComPtr::null(),
             size: (800, 600), // this will be replace later on with the real window size.
         }
     }
@@ -111,8 +111,8 @@ impl GraphicsDevice {
                 ..Default::default()
             };
 
-            self.hwnd = Some(hwnd);
-            self.swap_chain = Some(ComPtr::<IDXGISwapChain1>::new(
+            self.hwnd = hwnd;
+            self.swap_chain = ComPtr::<IDXGISwapChain1>::new(
                 |swap_chain| {
                     factory.CreateSwapChainForHwnd(
                         self.device.as_ptr() as *mut IUnknown,
@@ -124,7 +124,7 @@ impl GraphicsDevice {
                     )
                 },
                 "Unable to initialize swap chain.",
-            ));
+            );
 
             // Do not allow DXGI to make fullscreen mode transitions on ALT + Enter because we handle fullscreen mode
             // ourselves with a borderless fullscreen window.
@@ -141,29 +141,29 @@ impl GraphicsDevice {
             let null_views: [*mut ID3D11RenderTargetView; 1] = [null_mut()];
             self.context.OMSetRenderTargets(0, null_views.as_ptr(), null_mut());
             self.context.Flush();
-            self.back_buffer = None;
+            self.back_buffer = ComPtr::null();
 
-            let hr = self.swap_chain().ResizeBuffers(BACK_BUFFER_COUNT, width, height, BACK_BUFFER_FORMAT, 0);
+            let hr = self.swap_chain.ResizeBuffers(BACK_BUFFER_COUNT, width, height, BACK_BUFFER_FORMAT, 0);
             self.handle_swap_chain_result(hr);
 
             let texture = ComPtr::<ID3D11Texture2D>::new(
-                |texture| self.swap_chain().GetBuffer(0, &ID3D11Texture2D::uuidof(), texture as *mut *mut c_void),
+                |texture| self.swap_chain.GetBuffer(0, &ID3D11Texture2D::uuidof(), texture as *mut *mut c_void),
                 "Failed to retrieve back buffer texture.",
             );
 
-            self.back_buffer = Some(ComPtr::<ID3D11RenderTargetView>::new(
+            self.back_buffer = ComPtr::<ID3D11RenderTargetView>::new(
                 |back_buffer| {
                     self.device
                         .CreateRenderTargetView(texture.as_ptr() as *mut ID3D11Resource, null(), back_buffer)
                 },
                 "Failed to create render target for back buffer.",
-            ));
+            );
         }
     }
 
     pub fn present(&mut self) {
         unsafe {
-            let hr = self.swap_chain().Present(1 /* wait for VSYNC */, 0);
+            let hr = self.swap_chain.Present(1 /* wait for VSYNC */, 0);
             self.handle_swap_chain_result(hr);
         }
     }
@@ -171,26 +171,18 @@ impl GraphicsDevice {
     fn handle_swap_chain_result(&mut self, hr: HRESULT) {
         // If the device was reset for any reason, we must reinitialize everything.
         if hr == DXGI_ERROR_DEVICE_REMOVED || hr == DXGI_ERROR_DEVICE_RESET {
-            self.back_buffer = None;
-            self.swap_chain = None;
+            self.back_buffer = ComPtr::null();
+            self.swap_chain = ComPtr::null();
 
             let (device, context) = initialize_device_and_context();
             self.device = device;
             self.context = context;
-            self.initialize_swap_chain(self.hwnd.expect("HWND is not initialized."));
+            self.initialize_swap_chain(self.hwnd);
             let (width, height) = self.size;
             self.resize_back_buffer(width, height);
         } else if hr < 0 {
             panic!("An error related to the swap chain occurred. {}", get_error_messag_for(hr as u32));
         }
-    }
-
-    fn swap_chain(&self) -> &ComPtr<IDXGISwapChain1> {
-        self.swap_chain.as_ref().expect("Swap chain not initialized.")
-    }
-
-    fn back_buffer(&self) -> &ComPtr<ID3D11RenderTargetView> {
-        self.back_buffer.as_ref().expect("Back buffer not initialized.")
     }
 }
 
