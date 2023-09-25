@@ -5,8 +5,8 @@ use winapi::{shared::dxgi1_2::DXGI_SWAP_CHAIN_DESC1, um::d3d11::*, Interface};
 impl GraphicsDevice {
     pub fn resize_back_buffer(&mut self, width: u32, height: u32) {
         unsafe {
-            // We're not allowed to reference the back buffer anymore anywhere, so let's reset all state
-            // to the default values.
+            // We're not allowed to reference the old buffers anymore anywhere, so let's reset all
+            // D3D11 state to the default values.
             self.back_buffer = None;
             self.context.ClearState();
             self.context.Flush();

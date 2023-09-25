@@ -100,7 +100,7 @@ impl Window {
                 ptr::null_mut(),
                 ptr::null_mut(),
                 GetModuleHandleA(ptr::null()),
-                // Some window events are important immediately to keep the window's internal state
+                // Some window events are important to keep the window's internal state
                 // up-to-date immediately after opening. So let's capture them here.
                 &mut event_handler as *mut _ as *mut _,
             );
