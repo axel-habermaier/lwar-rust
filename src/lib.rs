@@ -11,7 +11,7 @@ pub fn run() {
     let mut should_exit = false;
 
     while !should_exit {
-        window.pending_events().for_each(|event| match event {
+        window.handle_events(|event| match event {
             Event::CloseRequested => should_exit = true,
             &Event::Resized(width, height) => graphics_device.resize_back_buffer(width, height),
             _ => {}
