@@ -17,6 +17,11 @@ winapi = {version = "0.3", features = [
   "winuser",
 ]}
 
+[build-dependencies]
+winapi = {version = "0.3", features = [
+  "d3dcompiler",
+]}
+
 [profile.dev]
 panic = "abort"
 
