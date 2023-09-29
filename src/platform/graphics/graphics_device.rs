@@ -68,11 +68,7 @@ impl GraphicsDevice {
                 Width: width,
                 Height: height,
                 Format: DXGI_FORMAT_B8G8R8A8_UNORM,
-                SampleDesc: DXGI_SAMPLE_DESC {
-                    Count: 1,
-                    Quality: 0,
-                    ..Default::default()
-                },
+                SampleDesc: DXGI_SAMPLE_DESC { Count: 1, Quality: 0 },
                 BufferUsage: DXGI_USAGE_RENDER_TARGET_OUTPUT,
                 BufferCount: 2,
                 SwapEffect: DXGI_SWAP_EFFECT_FLIP_DISCARD,
