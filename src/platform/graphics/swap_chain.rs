@@ -21,7 +21,10 @@ impl GraphicsDevice {
                 width,
                 height,
                 p: ComPtr::<ID3D11Texture2D>::new(
-                    |texture| self.swap_chain.GetBuffer(0, &ID3D11Texture2D::uuidof(), texture as *mut *mut _),
+                    |texture| {
+                        self.swap_chain
+                            .GetBuffer(0, &ID3D11Texture2D::uuidof(), texture as *mut *mut _)
+                    },
                     "Failed to retrieve back buffer texture.",
                 ),
             };

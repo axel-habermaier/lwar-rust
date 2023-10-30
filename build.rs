@@ -50,7 +50,10 @@ fn vertex_shader(path: &str) {
         }
 
         let mut writer = CodeWriter::new();
-        writer.append_line(format!("//CONST {}: [u8;] = {{ }};", Path::new(path).file_stem().unwrap().to_str().unwrap()));
+        writer.append_line(format!(
+            "//CONST {}: [u8;] = {{ }};",
+            Path::new(path).file_stem().unwrap().to_str().unwrap()
+        ));
         writer.save("TEST.g.rs");
     }
 }
@@ -89,9 +92,9 @@ impl CodeWriter {
         }
     }
 
-    fn append(&mut self, s: &str) {
+    fn append<T: AsRef<str>>(&mut self, s: T) {
         self.add_indentation();
-        self.buffer.push_str(s);
+        self.buffer.push_str(s.as_ref());
     }
 
     fn append_line<T: AsRef<str>>(&mut self, s: T) {

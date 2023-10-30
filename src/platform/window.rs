@@ -50,11 +50,19 @@ pub enum Event {
 impl Window {
     pub fn new(title: &str) -> Window {
         unsafe {
-            let class_name = CString::new(title).unwrap();
+            let mut window = Window {
+                cursor_inside: false,
+                has_focus: false,
+                width: 0,
+                height: 0,
+                hwnd: null_mut(),
+                class_name: CString::new(title).unwrap(),
+            };
 
+            let class_name_ptr = window.class_name.as_ptr();
             let wnd_class = WNDCLASSA {
                 lpfnWndProc: Some(wnd_proc),
-                lpszClassName: class_name.as_ptr(),
+                lpszClassName: class_name_ptr,
                 hInstance: GetModuleHandleA(ptr::null()),
                 ..Default::default()
             };
@@ -73,25 +81,15 @@ impl Window {
                 panic!("Failed to register raw input device. {}", get_last_error());
             };
 
-            let mut window = Window {
-                cursor_inside: false,
-                has_focus: false,
-                width: 0,
-                height: 0,
-                hwnd: null_mut(),
-                class_name: class_name.clone(),
-            };
-
-            let mut handle_event = |_: &Event| {};
             let mut event_handler = EventHandler {
                 window: &mut window,
-                handle_event: &mut handle_event,
+                handle_event: &mut |_| {},
             };
 
             let hwnd = CreateWindowExA(
                 0,
-                class_name.as_ptr(),
-                class_name.as_ptr(),
+                class_name_ptr,
+                class_name_ptr,
                 WS_OVERLAPPEDWINDOW | WS_VISIBLE,
                 CW_USEDEFAULT,
                 CW_USEDEFAULT,

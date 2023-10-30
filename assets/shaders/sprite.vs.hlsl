@@ -6,7 +6,7 @@ cbuffer PerFrameConstants : register(b0)
 cbuffer PerObjectConstants : register(b1)
 {
 	column_major matrix World;
-}
+};
 
 struct VS_INPUT
 {

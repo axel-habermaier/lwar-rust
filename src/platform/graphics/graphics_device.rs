@@ -53,7 +53,8 @@ impl GraphicsDevice {
 
             let factory = {
                 let device = device.convert::<IDXGIDevice1>();
-                let adapter = ComPtr::<IDXGIAdapter>::new(|adapter| device.GetAdapter(adapter), "Failed to retrieve DXGI adapter.");
+                let adapter =
+                    ComPtr::<IDXGIAdapter>::new(|adapter| device.GetAdapter(adapter), "Failed to retrieve DXGI adapter.");
 
                 ComPtr::<IDXGIFactory2>::new(
                     |factory| adapter.GetParent(&IDXGIFactory2::uuidof(), factory as *mut *mut _),
@@ -76,7 +77,16 @@ impl GraphicsDevice {
             };
 
             let swap_chain = ComPtr::<IDXGISwapChain1>::new(
-                |swap_chain| factory.CreateSwapChainForHwnd(device.as_ptr() as *mut _, hwnd, &swap_chain_desc, null(), null_mut(), swap_chain),
+                |swap_chain| {
+                    factory.CreateSwapChainForHwnd(
+                        device.as_ptr() as *mut _,
+                        hwnd,
+                        &swap_chain_desc,
+                        null(),
+                        null_mut(),
+                        swap_chain,
+                    )
+                },
                 "Unable to initialize swap chain.",
             );
 

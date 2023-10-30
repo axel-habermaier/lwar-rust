@@ -7,7 +7,10 @@ use std::{
 };
 use winapi::um::{
     errhandlingapi::GetLastError,
-    winbase::{FormatMessageW, LocalFree, FORMAT_MESSAGE_ALLOCATE_BUFFER, FORMAT_MESSAGE_FROM_SYSTEM, FORMAT_MESSAGE_IGNORE_INSERTS, FORMAT_MESSAGE_MAX_WIDTH_MASK},
+    winbase::{
+        FormatMessageW, LocalFree, FORMAT_MESSAGE_ALLOCATE_BUFFER, FORMAT_MESSAGE_FROM_SYSTEM, FORMAT_MESSAGE_IGNORE_INSERTS,
+        FORMAT_MESSAGE_MAX_WIDTH_MASK,
+    },
     winnt::HRESULT,
     winuser::{MessageBoxA, MB_ICONERROR, MB_OK, MB_TASKMODAL, MB_TOPMOST},
 };
@@ -16,7 +19,10 @@ pub fn get_error_message_for(error: u32) -> String {
     unsafe {
         let mut buffer: *mut u16 = null_mut();
         let length = FormatMessageW(
-            FORMAT_MESSAGE_IGNORE_INSERTS | FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_MAX_WIDTH_MASK | FORMAT_MESSAGE_ALLOCATE_BUFFER,
+            FORMAT_MESSAGE_IGNORE_INSERTS
+                | FORMAT_MESSAGE_FROM_SYSTEM
+                | FORMAT_MESSAGE_MAX_WIDTH_MASK
+                | FORMAT_MESSAGE_ALLOCATE_BUFFER,
             ptr::null(),
             error,
             0,
@@ -72,7 +78,12 @@ pub fn setup_panic_handler() {
         ))
         .unwrap();
 
-        MessageBoxA(null_mut(), message.as_ptr(), caption.as_ptr(), MB_ICONERROR | MB_OK | MB_TASKMODAL | MB_TOPMOST);
+        MessageBoxA(
+            null_mut(),
+            message.as_ptr(),
+            caption.as_ptr(),
+            MB_ICONERROR | MB_OK | MB_TASKMODAL | MB_TOPMOST,
+        );
         exit(-1);
     }));
 }

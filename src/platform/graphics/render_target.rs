@@ -14,7 +14,10 @@ impl GraphicsDevice {
                 width: texture.width,
                 height: texture.height,
                 p: ComPtr::<ID3D11RenderTargetView>::new(
-                    |back_buffer| self.device.CreateRenderTargetView(texture.p.as_ptr() as *mut ID3D11Resource, null(), back_buffer),
+                    |back_buffer| {
+                        self.device
+                            .CreateRenderTargetView(texture.p.as_ptr() as *mut ID3D11Resource, null(), back_buffer)
+                    },
                     "Failed to create render target.",
                 ),
             }
@@ -23,7 +26,12 @@ impl GraphicsDevice {
 
     pub fn clear(&self, render_target: &RenderTarget, color: Color) {
         unsafe {
-            let color = [color.r as f32 / 255., color.g as f32 / 255., color.b as f32 / 255., color.a as f32 / 255.];
+            let color = [
+                color.r as f32 / 255.,
+                color.g as f32 / 255.,
+                color.b as f32 / 255.,
+                color.a as f32 / 255.,
+            ];
             self.context.ClearRenderTargetView(render_target.p.as_ptr(), &color);
         }
     }
