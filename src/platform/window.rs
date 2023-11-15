@@ -166,7 +166,7 @@ impl Drop for Window {
 unsafe fn toggle_fullscreen(hwnd: HWND) {
     let style = GetWindowLongPtrA(hwnd, GWL_STYLE);
     if style == 0 {
-        panic!("Failed to retrieve Window style. {}", get_last_error());
+        panic!("Failed to retrieve window style. {}", get_last_error());
     }
 
     let is_fullscreen = (style & WS_THICKFRAME as isize) != WS_THICKFRAME as isize;
