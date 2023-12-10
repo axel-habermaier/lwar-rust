@@ -157,6 +157,7 @@ impl Window {
 impl Drop for Window {
     fn drop(&mut self) {
         unsafe {
+            SetWindowLongPtrA(self.hwnd, GWLP_USERDATA, 0);
             CloseWindow(self.hwnd);
             UnregisterClassA(self.class_name.as_ptr(), GetModuleHandleA(null()));
         };

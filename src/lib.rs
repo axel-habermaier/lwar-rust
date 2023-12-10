@@ -2,8 +2,8 @@
 
 pub mod platform;
 mod primitives;
-use crate::primitives::Color;
 use platform::{graphics::GraphicsDevice, Event, Window};
+use primitives::Color;
 
 pub fn run() {
     let mut window = Window::new("Orbs");
