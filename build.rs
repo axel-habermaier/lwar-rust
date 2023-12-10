@@ -1,7 +1,7 @@
 use std::{
     env::set_current_dir,
     ffi::{CString, OsStr},
-    fs::write,
+    fs,
     os::windows::prelude::OsStrExt,
     panic::set_hook,
     path::Path,
@@ -13,6 +13,7 @@ use winapi::um::d3dcompiler::{D3DCompileFromFile, D3DCOMPILE_DEBUG, D3DCOMPILE_E
 fn main() {
     setup_panic_handler();
     set_current_dir("assets/").unwrap();
+    create_dir("../target/assets/shaders/");
 
     vertex_shader("shaders/sprite.vs.hlsl");
 }
@@ -49,12 +50,14 @@ fn vertex_shader(path: &str) {
             panic!("{}", error)
         }
 
-        let mut writer = CodeWriter::new();
-        writer.append_line(format!(
-            "//CONST {}: [u8;] = {{ }};",
-            Path::new(path).file_stem().unwrap().to_str().unwrap()
-        ));
-        writer.save("TEST.g.rs");
+        fs::write(
+            format!(
+                "../target/assets/shaders/{}.rs",
+                Path::new(path).file_stem().unwrap().to_str().unwrap().to_owned()
+            ),
+            std::slice::from_raw_parts((*shader_blob).GetBufferPointer() as *const u8, (*shader_blob).GetBufferSize()),
+        )
+        .unwrap();
     }
 }
 
@@ -77,48 +80,8 @@ fn setup_panic_handler() {
     }));
 }
 
-struct CodeWriter {
-    buffer: String,
-    at_beginning_of_line: bool,
-    indent: u32,
-}
-
-impl CodeWriter {
-    fn new() -> CodeWriter {
-        CodeWriter {
-            buffer: String::with_capacity(8192),
-            at_beginning_of_line: true,
-            indent: 0,
-        }
-    }
-
-    fn append<T: AsRef<str>>(&mut self, s: T) {
-        self.add_indentation();
-        self.buffer.push_str(s.as_ref());
-    }
-
-    fn append_line<T: AsRef<str>>(&mut self, s: T) {
-        self.add_indentation();
-        self.buffer.push_str(s.as_ref());
-        self.new_line();
-    }
-
-    fn new_line(&mut self) {
-        self.buffer.push('\n');
-        self.at_beginning_of_line = true;
-    }
-
-    fn add_indentation(&mut self) {
-        if self.at_beginning_of_line {
-            self.at_beginning_of_line = false;
-
-            for _ in 0..self.indent {
-                self.buffer.push(' ');
-            }
-        }
-    }
-
-    fn save(&mut self, path: &str) {
-        write(path, self.buffer.as_bytes()).unwrap();
+fn create_dir(dir: &str) {
+    if !Path::new(dir).is_dir() {
+        fs::create_dir_all(dir).unwrap();
     }
 }

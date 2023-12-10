@@ -10,6 +10,8 @@ pub fn run() {
     let mut graphics_device = GraphicsDevice::new(&window);
     let mut should_exit = false;
 
+    let _shader = include_bytes!("../target/assets/shaders/sprite.vs.rs");
+
     while !should_exit {
         window.handle_events(|event| match event {
             Event::CloseRequested => should_exit = true,
