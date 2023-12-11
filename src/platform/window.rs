@@ -195,12 +195,12 @@ unsafe fn toggle_fullscreen(hwnd: HWND) {
 }
 
 unsafe extern "system" fn wnd_proc(hwnd: HWND, msg: UINT, wparam: WPARAM, lparam: LPARAM) -> LRESULT {
-    if msg == WM_CREATE {
-        let event_ptr = (*(lparam as *const CREATESTRUCTA)).lpCreateParams;
-        SetWindowLongPtrA(hwnd, GWLP_USERDATA, event_ptr as isize);
-    }
+    let event_ptr = if msg == WM_CREATE {
+        (*(lparam as *const CREATESTRUCTA)).lpCreateParams
+    } else {
+        GetWindowLongPtrA(hwnd, GWLP_USERDATA) as *mut c_void
+    };
 
-    let event_ptr = GetWindowLongPtrA(hwnd, GWLP_USERDATA) as *mut c_void;
     if event_ptr.is_null() {
         return DefWindowProcA(hwnd, msg, wparam, lparam);
     }
