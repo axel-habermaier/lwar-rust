@@ -55,11 +55,13 @@ pub fn handle_hresult_error(hr: HRESULT, error_message: &str) {
     }
 }
 
-pub fn setup_panic_handler() {
-    // Display a nice little message box when the app panics.
-    panic::set_hook(Box::new(|panic_info| unsafe {
-        let caption = CString::new("Orbs: Fatal Error").unwrap();
+pub enum ShowMessageBox {
+    Yes,
+    No,
+}
 
+pub fn setup_panic_handler(show_message_box: ShowMessageBox) {
+    panic::set_hook(Box::new(move |panic_info| unsafe {
         let error_message = {
             // Formatted strings such as `panic!("{}", 1)` are `String` instances.
             if let Some(s) = panic_info.payload().downcast_ref::<String>() {
@@ -71,19 +73,23 @@ pub fn setup_panic_handler() {
                 "An unknown error occurred."
             }
         };
+        eprintln!("{error_message}");
 
-        let message = CString::new(format!(
-            "The application has been terminated after a fatal error.\n\nThe error was: {}",
-            error_message
-        ))
-        .unwrap();
+        if let ShowMessageBox::Yes = show_message_box {
+            let caption = CString::new("Orbs: Fatal Error").unwrap();
+            let message = CString::new(format!(
+                "The application has been terminated after a fatal error.\n\nThe error was: {error_message}"
+            ))
+            .unwrap();
 
-        MessageBoxA(
-            null_mut(),
-            message.as_ptr(),
-            caption.as_ptr(),
-            MB_ICONERROR | MB_OK | MB_TASKMODAL | MB_TOPMOST,
-        );
+            MessageBoxA(
+                null_mut(),
+                message.as_ptr(),
+                caption.as_ptr(),
+                MB_ICONERROR | MB_OK | MB_TASKMODAL | MB_TOPMOST,
+            );
+        }
+
         exit(-1);
     }));
 }

@@ -1,25 +1,16 @@
-use std::{
-    env::set_current_dir,
-    ffi::{CString, OsStr},
-    fs,
-    os::windows::prelude::OsStrExt,
-    panic::set_hook,
-    path::Path,
-    process::exit,
-    ptr::{null, null_mut},
-};
+include!("src/platform/error.rs");
+use std::{env::set_current_dir, ffi::OsStr, fs, os::windows::prelude::OsStrExt, path::Path, ptr::null};
 use winapi::um::d3dcompiler::{D3DCompileFromFile, D3DCOMPILE_DEBUG, D3DCOMPILE_ENABLE_STRICTNESS};
 
 fn main() {
-    setup_panic_handler();
+    setup_panic_handler(ShowMessageBox::No);
     set_current_dir("assets/").unwrap();
-    create_dir("../target/assets/shaders/");
 
     vertex_shader("shaders/sprite.vs.hlsl");
 }
 
 fn vertex_shader(path: &str) {
-    println!("Compiling vertex shader '{}'.", path);
+    println!("Compiling vertex shader '{path}'.");
 
     unsafe {
         let main = CString::new("Main").unwrap();
@@ -47,41 +38,31 @@ fn vertex_shader(path: &str) {
             let text = (*error_blob).GetBufferPointer() as *mut u8;
             let size = (*error_blob).GetBufferSize();
             let error = String::from_utf8_unchecked(Vec::from_raw_parts(text, size, size));
-            panic!("{}", error)
+            panic!("{error}")
         }
 
-        fs::write(
-            format!(
-                "../target/assets/shaders/{}.rs",
-                Path::new(path).file_stem().unwrap().to_str().unwrap().to_owned()
-            ),
+        write_file(
+            path,
             std::slice::from_raw_parts((*shader_blob).GetBufferPointer() as *const u8, (*shader_blob).GetBufferSize()),
         )
-        .unwrap();
     }
 }
 
-fn setup_panic_handler() {
-    set_hook(Box::new(|panic_info| {
-        let error_message = {
-            // Formatted strings such as `panic!("{}", 1)` are `String` instances.
-            if let Some(s) = panic_info.payload().downcast_ref::<String>() {
-                s
-            // Constant strings such as `panic!("") are `&str` instances.
-            } else if let Some(s) = panic_info.payload().downcast_ref::<&str>() {
-                s
-            } else {
-                "An unknown error occurred."
-            }
-        };
+fn write_file<C: AsRef<[u8]>>(path: &str, content: C) {
+    let out_dir = {
+        if cfg!(debug_assertions) {
+            "debug/"
+        } else {
+            "release/"
+        }
+    };
+    let asset_path = format!("../target/assets/{out_dir}{path}");
+    let file_path = Path::new(&asset_path);
+    let directory = file_path.parent().unwrap();
 
-        println!("{}", error_message);
-        exit(-1);
-    }));
-}
-
-fn create_dir(dir: &str) {
-    if !Path::new(dir).is_dir() {
-        fs::create_dir_all(dir).unwrap();
+    if !directory.is_dir() {
+        fs::create_dir_all(directory).unwrap_or_else(|e| panic!("Failed to create directory '{directory:?}': {e}."));
     }
+
+    fs::write(file_path, content).unwrap_or_else(|e| panic!("Failed to write file '{asset_path}': {e}."));
 }
