@@ -4,7 +4,6 @@ use super::{
 };
 use core::{mem::size_of, ptr};
 use std::{
-    ffi::CString,
     mem::MaybeUninit,
     ptr::{null, null_mut},
 };
@@ -17,6 +16,8 @@ use winapi::{
     um::{libloaderapi::GetModuleHandleA, winuser::*},
 };
 
+const WINDOW_TITLE: *const u8 = b"Orbs\0".as_ptr();
+
 struct EventHandler<'a, 'b> {
     window: &'a mut Window,
     handle_event: &'b mut dyn FnMut(&Event),
@@ -28,7 +29,6 @@ pub struct Window {
     width: u32,
     height: u32,
     hwnd: HWND,
-    class_name: CString,
 }
 
 #[derive(Debug)]
@@ -47,8 +47,8 @@ pub enum Event {
     MouseWheel(i32),
 }
 
-impl Window {
-    pub fn new(title: &str) -> Window {
+impl Default for Window {
+    fn default() -> Window {
         unsafe {
             let mut window = Window {
                 cursor_inside: false,
@@ -56,13 +56,11 @@ impl Window {
                 width: 0,
                 height: 0,
                 hwnd: null_mut(),
-                class_name: CString::new(title).unwrap(),
             };
 
-            let class_name_ptr = window.class_name.as_ptr();
             let wnd_class = WNDCLASSA {
                 lpfnWndProc: Some(wnd_proc),
-                lpszClassName: class_name_ptr,
+                lpszClassName: WINDOW_TITLE as *const _,
                 hInstance: GetModuleHandleA(ptr::null()),
                 ..Default::default()
             };
@@ -88,8 +86,8 @@ impl Window {
 
             let hwnd = CreateWindowExA(
                 0,
-                class_name_ptr,
-                class_name_ptr,
+                WINDOW_TITLE as *const _,
+                WINDOW_TITLE as *const _,
                 WS_OVERLAPPEDWINDOW | WS_VISIBLE,
                 CW_USEDEFAULT,
                 CW_USEDEFAULT,
@@ -114,7 +112,9 @@ impl Window {
             window
         }
     }
+}
 
+impl Window {
     pub fn handle_events(&mut self, mut handle_event: impl FnMut(&Event)) {
         let width = self.width;
         let height = self.height;
@@ -159,7 +159,7 @@ impl Drop for Window {
         unsafe {
             SetWindowLongPtrA(self.hwnd, GWLP_USERDATA, 0);
             CloseWindow(self.hwnd);
-            UnregisterClassA(self.class_name.as_ptr(), GetModuleHandleA(null()));
+            UnregisterClassA(WINDOW_TITLE as *const _, GetModuleHandleA(null()));
         };
     }
 }

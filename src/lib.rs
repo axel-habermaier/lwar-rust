@@ -6,7 +6,7 @@ use platform::{graphics::GraphicsDevice, Event, Window};
 use primitives::Color;
 
 pub fn run() {
-    let mut window = Window::new("Orbs");
+    let mut window = Window::default();
     let mut graphics_device = GraphicsDevice::new(&window);
     let mut should_exit = false;
 

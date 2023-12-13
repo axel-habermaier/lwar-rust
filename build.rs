@@ -13,8 +13,6 @@ fn vertex_shader(path: &str) {
     println!("Compiling vertex shader '{path}'.");
 
     unsafe {
-        let main = CString::new("Main").unwrap();
-        let target = CString::new("vs_5_0").unwrap();
         let mut shader_blob = null_mut();
         let mut error_blob = null_mut();
 
@@ -22,8 +20,8 @@ fn vertex_shader(path: &str) {
             OsStr::new(path).encode_wide().chain([0]).collect::<Vec<_>>().as_ptr(),
             null(),
             null_mut(),
-            main.as_ptr(),
-            target.as_ptr(),
+            b"Main\0".as_ptr() as *const _,
+            b"vs_5_0\0".as_ptr() as *const _,
             if cfg!(debug_assertions) {
                 D3DCOMPILE_DEBUG | D3DCOMPILE_ENABLE_STRICTNESS
             } else {

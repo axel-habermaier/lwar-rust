@@ -76,7 +76,6 @@ pub fn setup_panic_handler(show_message_box: ShowMessageBox) {
         eprintln!("{error_message}");
 
         if let ShowMessageBox::Yes = show_message_box {
-            let caption = CString::new("Orbs: Fatal Error").unwrap();
             let message = CString::new(format!(
                 "The application has been terminated after a fatal error.\n\nThe error was: {error_message}"
             ))
@@ -85,7 +84,7 @@ pub fn setup_panic_handler(show_message_box: ShowMessageBox) {
             MessageBoxA(
                 null_mut(),
                 message.as_ptr(),
-                caption.as_ptr(),
+                b"Orbs: Fatal Error\0".as_ptr() as *const _,
                 MB_ICONERROR | MB_OK | MB_TASKMODAL | MB_TOPMOST,
             );
         }
