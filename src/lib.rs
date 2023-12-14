@@ -15,7 +15,8 @@ pub fn run() {
     while !should_exit {
         window.handle_events(|event| match event {
             Event::CloseRequested => should_exit = true,
-            &Event::Resized(width, height) => graphics_device.resize_back_buffer(width, height),
+            Event::Resized(width, height) => graphics_device.resize_back_buffer(*width, *height),
+            Event::KeyPressed(key, sc) => println!("{key:?}, {sc}"),
             _ => {}
         });
 
