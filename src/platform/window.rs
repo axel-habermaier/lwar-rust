@@ -11,7 +11,7 @@ use winapi::{
     ctypes::c_void,
     shared::{
         minwindef::{HIWORD, LOWORD, LPARAM, LRESULT, UINT, WPARAM},
-        windef::HWND,
+        windef::{HWND, RECT},
     },
     um::{libloaderapi::GetModuleHandleA, winuser::*},
 };
@@ -26,8 +26,7 @@ struct EventHandler<'a, 'b> {
 pub struct Window {
     cursor_inside: bool,
     has_focus: bool,
-    width: u32,
-    height: u32,
+    size: (u32, u32),
     hwnd: HWND,
 }
 
@@ -49,15 +48,14 @@ pub enum Event {
 
 impl Default for Window {
     fn default() -> Window {
-        unsafe {
-            let mut window = Window {
-                cursor_inside: false,
-                has_focus: false,
-                width: 0,
-                height: 0,
-                hwnd: null_mut(),
-            };
+        let mut window = Window {
+            cursor_inside: false,
+            has_focus: false,
+            size: (0, 0),
+            hwnd: null_mut(),
+        };
 
+        unsafe {
             let wnd_class = WNDCLASSA {
                 lpfnWndProc: Some(wnd_proc),
                 lpszClassName: WINDOW_TITLE as *const _,
@@ -96,8 +94,8 @@ impl Default for Window {
                 ptr::null_mut(),
                 ptr::null_mut(),
                 GetModuleHandleA(ptr::null()),
-                // Some window events are important to keep the window's internal state
-                // up-to-date immediately after opening. So let's capture them here.
+                // Some window events during window creation are important to keep the window's internal state
+                // up-to-date. So make sure we can capture them.
                 &mut event_handler as *mut _ as *mut _,
             );
 
@@ -109,6 +107,13 @@ impl Default for Window {
                 toggle_fullscreen(hwnd);
             }
 
+            // Since we don't get a WM_SIZE message during window creation, we have to manually determine
+            // the window's initial size.
+            let mut rect = RECT::default();
+            if GetClientRect(hwnd, &mut rect) != 0 {
+                window.size = (rect.right as u32 - rect.left as u32, rect.bottom as u32 - rect.top as u32);
+            }
+
             window
         }
     }
@@ -116,10 +121,9 @@ impl Default for Window {
 
 impl Window {
     pub fn handle_events(&mut self, mut handle_event: impl FnMut(&Event)) {
-        let width = self.width;
-        let height = self.height;
-        let has_focus = self.has_focus;
-        let hwnd = self.hwnd;
+        let Window {
+            size, has_focus, hwnd, ..
+        } = *self;
 
         let mut event_handler = EventHandler {
             window: self,
@@ -134,14 +138,16 @@ impl Window {
                 TranslateMessage(&msg);
                 DispatchMessageA(&msg);
             }
+
+            SetWindowLongPtrA(hwnd, GWLP_USERDATA, 0);
         }
 
         if has_focus != self.has_focus {
             handle_event(&Event::Focused(self.has_focus));
         }
 
-        if width != self.width || height != self.height {
-            handle_event(&Event::Resized(self.width, self.height));
+        if size != self.size {
+            handle_event(&Event::Resized(self.size.0, self.size.1));
         }
     }
 
@@ -150,7 +156,7 @@ impl Window {
     }
 
     pub fn size(&self) -> (u32, u32) {
-        (self.width, self.height)
+        self.size
     }
 }
 
@@ -219,14 +225,13 @@ unsafe extern "system" fn wnd_proc(hwnd: HWND, msg: UINT, wparam: WPARAM, lparam
         WM_SYSKEYDOWN if wparam == VK_RETURN as usize && (lparam & 0x60000000) == 0x20000000 => toggle_fullscreen(hwnd),
         WM_CLOSE => {
             handle_event(&Event::CloseRequested);
-            // Do not forward the message to the default wnd proc, as we want full control over when the window is actually closed.
             return 0;
         }
         WM_GETMINMAXINFO => {
             // Restrict the minimum allowed window size.
             let info = lparam as *mut MINMAXINFO;
-            (*info).ptMinTrackSize.x = 600;
-            (*info).ptMinTrackSize.y = 400;
+            (*info).ptMinTrackSize.x = 640;
+            (*info).ptMinTrackSize.y = 480;
         }
         // Check WM_ACTIVATE, WM_NCACTIVATE, WM_ACTIVATEAPP in order to ensure that we do not miss an activation or deactivation.
         WM_ACTIVATE => window.has_focus = LOWORD(wparam as u32) != WA_INACTIVE,
@@ -276,8 +281,7 @@ unsafe extern "system" fn wnd_proc(hwnd: HWND, msg: UINT, wparam: WPARAM, lparam
             }
         }
         WM_SIZE => {
-            window.width = LOWORD(lparam as u32) as u32;
-            window.height = HIWORD(lparam as u32) as u32;
+            window.size = (LOWORD(lparam as u32) as u32, HIWORD(lparam as u32) as u32);
         }
         _ => (),
     };
