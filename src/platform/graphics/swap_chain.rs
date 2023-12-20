@@ -14,8 +14,10 @@ impl GraphicsDevice {
             let mut desc = DXGI_SWAP_CHAIN_DESC1::default();
             self.swap_chain.GetDesc1(&mut desc);
 
-            let hr = self.swap_chain.ResizeBuffers(desc.BufferCount, width, height, desc.Format, 0);
-            handle_hresult_error(hr, "Failed to resize swap chain buffers.");
+            handle_hresult_error(
+                self.swap_chain.ResizeBuffers(desc.BufferCount, width, height, desc.Format, 0),
+                "Failed to resize swap chain buffers.",
+            );
 
             let texture = Texture2D {
                 width,
@@ -35,8 +37,10 @@ impl GraphicsDevice {
 
     pub fn present(&self) {
         unsafe {
-            let hr = self.swap_chain.Present(1 /* wait for VSYNC */, 0);
-            handle_hresult_error(hr, "Failed to present back buffer.");
+            handle_hresult_error(
+                self.swap_chain.Present(1 /* wait for VSYNC */, 0),
+                "Failed to present back buffer.",
+            );
         }
     }
 }

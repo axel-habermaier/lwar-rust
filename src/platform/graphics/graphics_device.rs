@@ -63,8 +63,6 @@ impl GraphicsDevice {
             };
 
             let (width, height) = window.size();
-            let hwnd = window.hwnd();
-
             let swap_chain_desc = DXGI_SWAP_CHAIN_DESC1 {
                 Width: width,
                 Height: height,
@@ -80,7 +78,7 @@ impl GraphicsDevice {
                 |swap_chain| {
                     factory.CreateSwapChainForHwnd(
                         device.as_ptr() as *mut _,
-                        hwnd,
+                        window.hwnd(),
                         &swap_chain_desc,
                         null(),
                         null_mut(),
@@ -93,7 +91,7 @@ impl GraphicsDevice {
             // Do not allow DXGI to make fullscreen mode transitions on ALT + Enter because we handle fullscreen mode
             // ourselves with a borderless fullscreen window.
             let dxgi_mwa_no_alt_enter = 1 << 1; // this is missing in the winapi crate
-            factory.MakeWindowAssociation(hwnd, dxgi_mwa_no_alt_enter);
+            factory.MakeWindowAssociation(window.hwnd(), dxgi_mwa_no_alt_enter);
 
             let mut device = GraphicsDevice {
                 device,

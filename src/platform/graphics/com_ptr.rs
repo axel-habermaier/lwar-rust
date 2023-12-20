@@ -15,8 +15,7 @@ pub struct ComPtr<T: Interface> {
 impl<T: Interface> ComPtr<T> {
     pub fn new(func: impl FnOnce(*mut *mut T) -> HRESULT, error_message: &str) -> ComPtr<T> {
         let mut ptr: *mut T = null_mut();
-        let hr = func(&mut ptr);
-        handle_hresult_error(hr, error_message);
+        handle_hresult_error(func(&mut ptr), error_message);
 
         ComPtr {
             p: NonNull::new(ptr).expect("Failed to allocate COM object."),
