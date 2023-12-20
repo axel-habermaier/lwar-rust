@@ -2,9 +2,9 @@
     "version": "2.0.0",
     "tasks": [
         {
-            "label": "cargo build",
+            "label": "cargo check",
             "type": "cargo",
-            "command": "build",
+            "command": "check",
             "problemMatcher": [
                 "$rustc"
             ],
@@ -12,6 +12,14 @@
                 "kind": "build",
                 "isDefault": true
             }
+        },
+        {
+            "label": "cargo build",
+            "type": "cargo",
+            "command": "build",
+            "problemMatcher": [
+                "$rustc"
+            ],
         }
     ]
 }

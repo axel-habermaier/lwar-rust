@@ -5,10 +5,7 @@ use super::{
 use core::{mem::size_of, ptr};
 use std::ptr::{null, null_mut};
 use winapi::{
-    shared::{
-        minwindef::{HIWORD, LOWORD, LPARAM, LRESULT, UINT, WPARAM},
-        windef::{HWND, RECT},
-    },
+    shared::{minwindef::*, windef::*},
     um::{libloaderapi::GetModuleHandleA, winuser::*},
 };
 
