@@ -3,7 +3,10 @@ use super::{
     input::{Key, MouseButton},
 };
 use core::{mem::size_of, ptr};
-use std::ptr::{null, null_mut};
+use std::{
+    ffi::CString,
+    ptr::{null, null_mut},
+};
 use winapi::{
     shared::{minwindef::*, windef::*},
     um::{libloaderapi::GetModuleHandleA, winuser::*},
@@ -290,5 +293,18 @@ unsafe fn handle_keyboard_input(lparam: LPARAM, handle_event: &mut dyn FnMut(&Ev
                 handle_event(&Event::KeyPressed(key, scan_code));
             }
         }
+    }
+}
+
+pub fn show_message_box<T: AsRef<str>>(content: T) {
+    let message = CString::new(content.as_ref()).unwrap();
+
+    unsafe {
+        MessageBoxA(
+            null_mut(),
+            message.as_ptr(),
+            WINDOW_TITLE,
+            MB_ICONERROR | MB_OK | MB_TASKMODAL | MB_TOPMOST,
+        );
     }
 }

@@ -1,5 +1,4 @@
 use std::{
-    ffi::CString,
     panic,
     process::exit,
     ptr::{self, null_mut},
@@ -12,7 +11,6 @@ use winapi::um::{
         FORMAT_MESSAGE_MAX_WIDTH_MASK,
     },
     winnt::HRESULT,
-    winuser::{MessageBoxA, MB_ICONERROR, MB_OK, MB_TASKMODAL, MB_TOPMOST},
 };
 
 pub fn get_error_message_for(error: u32) -> String {
@@ -60,8 +58,8 @@ pub enum ShowMessageBox {
     No,
 }
 
-pub fn setup_panic_handler(show_message_box: ShowMessageBox) {
-    panic::set_hook(Box::new(move |panic_info| unsafe {
+pub fn on_panic(callback: fn(error_message: &str)) {
+    panic::set_hook(Box::new(move |panic_info| {
         let error_message = {
             // Formatted strings such as `panic!("{}", 1)` are `String` instances.
             if let Some(s) = panic_info.payload().downcast_ref::<String>() {
@@ -73,21 +71,9 @@ pub fn setup_panic_handler(show_message_box: ShowMessageBox) {
                 "An unknown error occurred."
             }
         };
+
         eprintln!("{error_message}");
-
-        if let ShowMessageBox::Yes = show_message_box {
-            let message = CString::new(format!(
-                "The application has been terminated after a fatal error.\n\nThe error was: {error_message}"
-            ))
-            .unwrap();
-
-            MessageBoxA(
-                null_mut(),
-                message.as_ptr(),
-                b"Orbs: Fatal Error\0".as_ptr() as *const _,
-                MB_ICONERROR | MB_OK | MB_TASKMODAL | MB_TOPMOST,
-            );
-        }
+        callback(error_message);
 
         exit(-1);
     }));

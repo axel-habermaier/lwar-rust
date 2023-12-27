@@ -2,13 +2,18 @@
 
 use std::process::exit;
 
-use orbs::platform::error::{setup_panic_handler, ShowMessageBox};
+use orbs::platform::error::on_panic;
 use orbs::platform::graphics::report_d3d11_leaks;
+use orbs::platform::show_message_box;
 use winapi::um::wincon::*;
 use winapi::um::winuser::*;
 
 fn main() {
-    setup_panic_handler(ShowMessageBox::Yes);
+    on_panic(|error_message| {
+        show_message_box(format!(
+            "The application has been terminated after a fatal error.\n\nThe error was: {error_message}"
+        ));
+    });
 
     unsafe {
         if AttachConsole(ATTACH_PARENT_PROCESS) != 0 {
@@ -19,6 +24,5 @@ fn main() {
     orbs::run();
 
     report_d3d11_leaks();
-
     exit(0);
 }

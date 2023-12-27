@@ -3,7 +3,7 @@ use std::{env::set_current_dir, ffi::OsStr, fs, os::windows::prelude::OsStrExt, 
 use winapi::um::d3dcompiler::{D3DCompileFromFile, D3DCOMPILE_DEBUG, D3DCOMPILE_ENABLE_STRICTNESS};
 
 fn main() {
-    setup_panic_handler(ShowMessageBox::No);
+    on_panic(|_| {});
     set_current_dir("assets/").unwrap();
 
     vertex_shader("shaders/sprite.vs.hlsl");
