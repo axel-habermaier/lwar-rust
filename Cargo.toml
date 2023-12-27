@@ -7,7 +7,6 @@ version = "0.1.0"
 [dependencies]
 num_enum = {version = "0.5.7"}
 winapi = {version = "0.3.9", features = [
-  "consoleapi",
   "d3d11",
   "dxgi1_5",
   "dxgidebug",
