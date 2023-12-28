@@ -81,11 +81,11 @@ impl Window {
         }
     }
 
-    pub fn handle_events(&mut self, mut handle_event: impl FnMut(&Event)) {
+    pub fn handle_events(&mut self, mut handle_event: impl FnMut(Event)) {
         let old_size = self.size();
 
         unsafe {
-            let mut handler: &mut dyn FnMut(&Event) = &mut handle_event;
+            let mut handler: &mut dyn FnMut(Event) = &mut handle_event;
             SetWindowLongPtrA(self.hwnd, GWLP_USERDATA, &mut handler as *mut _ as isize);
 
             let mut msg: MSG = Default::default();
@@ -99,7 +99,7 @@ impl Window {
 
         let new_size = self.size();
         if old_size != new_size && unsafe { IsIconic(self.hwnd) } == 0 {
-            handle_event(&Event::Resized(new_size.0, new_size.1));
+            handle_event(Event::Resized(new_size.0, new_size.1));
         }
     }
 
@@ -149,7 +149,7 @@ unsafe fn toggle_fullscreen(hwnd: HWND) {
         }
 
         if IsZoomed(hwnd) != 0 {
-            // If the Window is already maximized, we have to un-maximize it first to get rid of the taskbar.
+            // Necessary to get rid of the taskbar.
             ShowWindow(hwnd, SW_RESTORE);
         }
 
@@ -168,7 +168,7 @@ unsafe extern "system" fn wnd_proc(hwnd: HWND, msg: UINT, wparam: WPARAM, lparam
         return DefWindowProcA(hwnd, msg, wparam, lparam);
     }
 
-    let handle_event: &mut &mut dyn FnMut(&Event) = &mut *(event_ptr as *mut _);
+    let handle_event: &mut &mut dyn FnMut(Event) = &mut *(event_ptr as *mut _);
 
     match msg {
         WM_INPUT => handle_keyboard_input(lparam, handle_event),
@@ -178,36 +178,35 @@ unsafe extern "system" fn wnd_proc(hwnd: HWND, msg: UINT, wparam: WPARAM, lparam
         // Toggle fullscreen on ALT + ENTER.
         WM_SYSKEYDOWN if wparam == VK_RETURN as usize && (lparam & 0x60000000) == 0x20000000 => toggle_fullscreen(hwnd),
         WM_CLOSE => {
-            handle_event(&Event::CloseRequested);
+            handle_event(Event::CloseRequested);
             return 0;
         }
         WM_GETMINMAXINFO => {
-            // Restrict the minimum allowed window size.
             let info = lparam as *mut MINMAXINFO;
             (*info).ptMinTrackSize.x = 640;
             (*info).ptMinTrackSize.y = 480;
         }
-        WM_MOUSEMOVE => handle_event(&Event::MouseMoved(LOWORD(lparam as u32) as u32, HIWORD(lparam as u32) as u32)),
-        WM_LBUTTONDOWN => handle_event(&Event::MousePressed(MouseButton::Left)),
-        WM_LBUTTONUP => handle_event(&Event::MouseReleased(MouseButton::Left)),
-        WM_RBUTTONDOWN => handle_event(&Event::MousePressed(MouseButton::Right)),
-        WM_RBUTTONUP => handle_event(&Event::MouseReleased(MouseButton::Right)),
-        WM_MBUTTONDOWN => handle_event(&Event::MousePressed(MouseButton::Middle)),
-        WM_MBUTTONUP => handle_event(&Event::MouseReleased(MouseButton::Middle)),
-        WM_XBUTTONDOWN => handle_event(&Event::MousePressed(if HIWORD(wparam as u32) == XBUTTON1 {
+        WM_MOUSEMOVE => handle_event(Event::MouseMoved(LOWORD(lparam as u32) as u32, HIWORD(lparam as u32) as u32)),
+        WM_LBUTTONDOWN => handle_event(Event::MousePressed(MouseButton::Left)),
+        WM_LBUTTONUP => handle_event(Event::MouseReleased(MouseButton::Left)),
+        WM_RBUTTONDOWN => handle_event(Event::MousePressed(MouseButton::Right)),
+        WM_RBUTTONUP => handle_event(Event::MouseReleased(MouseButton::Right)),
+        WM_MBUTTONDOWN => handle_event(Event::MousePressed(MouseButton::Middle)),
+        WM_MBUTTONUP => handle_event(Event::MouseReleased(MouseButton::Middle)),
+        WM_XBUTTONDOWN => handle_event(Event::MousePressed(if HIWORD(wparam as u32) == XBUTTON1 {
             MouseButton::XButton1
         } else {
             MouseButton::XButton2
         })),
-        WM_XBUTTONUP => handle_event(&Event::MouseReleased(if HIWORD(wparam as u32) == XBUTTON1 {
+        WM_XBUTTONUP => handle_event(Event::MouseReleased(if HIWORD(wparam as u32) == XBUTTON1 {
             MouseButton::XButton1
         } else {
             MouseButton::XButton2
         })),
-        WM_MOUSEWHEEL => handle_event(&Event::MouseWheel((GET_WHEEL_DELTA_WPARAM(wparam) / WHEEL_DELTA) as i32)),
+        WM_MOUSEWHEEL => handle_event(Event::MouseWheel((GET_WHEEL_DELTA_WPARAM(wparam) / WHEEL_DELTA) as i32)),
         WM_CHAR => {
             if let Some(character) = char::from_u32(wparam as u32) {
-                handle_event(&Event::CharacterEntered(character))
+                handle_event(Event::CharacterEntered(character))
             }
         }
         _ => (),
@@ -216,7 +215,7 @@ unsafe extern "system" fn wnd_proc(hwnd: HWND, msg: UINT, wparam: WPARAM, lparam
     DefWindowProcA(hwnd, msg, wparam, lparam)
 }
 
-unsafe fn handle_keyboard_input(lparam: LPARAM, handle_event: &mut dyn FnMut(&Event)) {
+unsafe fn handle_keyboard_input(lparam: LPARAM, handle_event: &mut dyn FnMut(Event)) {
     let mut input = RAWINPUT::default();
     let mut size = size_of::<RAWINPUT>() as u32;
     let success = GetRawInputData(
@@ -231,8 +230,7 @@ unsafe fn handle_keyboard_input(lparam: LPARAM, handle_event: &mut dyn FnMut(&Ev
         panic!("Failed to read raw keyboard input. {}", get_last_error());
     }
 
-    // Extract keyboard raw input data; see http://molecularmusings.wordpress.com/2011/09/05/properly-handling-keyboard-input/
-    // for an explanation of what's going on.
+    // Extract keyboard raw input data; see http://molecularmusings.wordpress.com/2011/09/05/properly-handling-keyboard-input/.
     if input.header.dwType == RIM_TYPEKEYBOARD {
         let mut virtual_key = input.data.keyboard().VKey as i32;
         let mut scan_code = input.data.keyboard().MakeCode as u32;
@@ -288,9 +286,9 @@ unsafe fn handle_keyboard_input(lparam: LPARAM, handle_event: &mut dyn FnMut(&Ev
 
         if let Some(key) = key {
             if released {
-                handle_event(&Event::KeyReleased(key, scan_code));
+                handle_event(Event::KeyReleased(key, scan_code));
             } else {
-                handle_event(&Event::KeyPressed(key, scan_code));
+                handle_event(Event::KeyPressed(key, scan_code));
             }
         }
     }
