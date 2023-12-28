@@ -1,36 +1,38 @@
-cbuffer PerFrameConstants : register(b0)
-{ 
-	column_major matrix Projection;
+// cbuffer PerFrameConstants : register(b0)
+// { 
+// 	column_major matrix Projection;
+// };
+
+// cbuffer PerObjectConstants : register(b1)
+// {
+// 	column_major matrix World;
+// };
+
+struct Input
+{
+	float4 position		: POSITION;
+	// float2 texCoords	: TEXCOORD0;
+	// float4 color		: COLOR0;
 };
 
-cbuffer PerObjectConstants : register(b1)
+struct Output
 {
-	column_major matrix World;
+	// float2 texCoords	: TEXCOORD0;
+	// float4 color		: COLOR0;
+	float4 position		: SV_Position;
 };
 
-struct VS_INPUT
+Output main(Input input)
 {
-	float4 Position		: POSITION;
-	float2 TexCoords	: TEXCOORD0;
-	float4 Color		: COLOR0;
-};
+	Output output;
 
-struct VS_OUTPUT
-{
-	float2 TexCoords	: TEXCOORD0;
-	float4 Color		: COLOR0;
-	float4 Position		: SV_Position;
-};
+	//float4 position = mul(World, input.Position);
+	//output.Position = mul(Projection, position);
 
-VS_OUTPUT Main(VS_INPUT input)
-{
-	VS_OUTPUT output;
+	//output.Color = input.Color;
+	//output.TexCoords = input.TexCoords;
 
-	float4 position = mul(World, input.Position);
-	output.Position = mul(Projection, position);
-
-	output.Color = input.Color;
-	output.TexCoords = input.TexCoords;
+	output.position = input.position;
 
 	return output;
 }

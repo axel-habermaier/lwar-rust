@@ -26,13 +26,15 @@ impl GraphicsDevice {
 
     pub fn clear(&self, render_target: &RenderTarget, color: Color) {
         unsafe {
-            let color = [
-                color.r as f32 / 255.,
-                color.g as f32 / 255.,
-                color.b as f32 / 255.,
-                color.a as f32 / 255.,
-            ];
-            self.context.ClearRenderTargetView(render_target.p.as_ptr(), &color);
+            self.context.ClearRenderTargetView(
+                render_target.p.as_ptr(),
+                &[
+                    color.r as f32 / 255.,
+                    color.g as f32 / 255.,
+                    color.b as f32 / 255.,
+                    color.a as f32 / 255.,
+                ],
+            );
         }
     }
 }

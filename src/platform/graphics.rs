@@ -3,7 +3,7 @@ use winapi::{
     ctypes::c_void,
     shared::{dxgi1_2::IDXGISwapChain1, dxgi1_3::DXGIGetDebugInterface1},
     um::{
-        d3d11::{ID3D11Device, ID3D11DeviceContext, ID3D11RenderTargetView, ID3D11Texture2D},
+        d3d11::*,
         dxgidebug::{IDXGIDebug, DXGI_DEBUG_ALL, DXGI_DEBUG_RLO_ALL},
     },
     Interface,
@@ -12,6 +12,7 @@ use winapi::{
 mod com_ptr;
 pub mod graphics_device;
 pub mod render_target;
+pub mod shader;
 pub mod state;
 pub mod swap_chain;
 pub mod texture;
@@ -33,6 +34,15 @@ pub struct Texture2D {
     p: ComPtr<ID3D11Texture2D>,
     pub width: u32,
     pub height: u32,
+}
+
+pub struct VertexShader {
+    p: ComPtr<ID3D11VertexShader>,
+    input_layout: ComPtr<ID3D11InputLayout>,
+}
+
+pub struct PixelShader {
+    p: ComPtr<ID3D11PixelShader>,
 }
 
 pub fn report_d3d11_leaks() {
