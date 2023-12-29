@@ -172,19 +172,15 @@ unsafe extern "system" fn wnd_proc(hwnd: HWND, msg: UINT, wparam: WPARAM, lparam
 
     match msg {
         WM_INPUT => handle_keyboard_input(lparam, handle_event),
-        WM_SYSCOMMAND if wparam == SC_KEYMENU => {
-            return 0;
-        }
-        // Toggle fullscreen on ALT + ENTER.
         WM_SYSKEYDOWN if wparam == VK_RETURN as usize && (lparam & 0x60000000) == 0x20000000 => toggle_fullscreen(hwnd),
         WM_CLOSE => {
             handle_event(Event::CloseRequested);
             return 0;
         }
         WM_GETMINMAXINFO => {
-            let info = lparam as *mut MINMAXINFO;
-            (*info).ptMinTrackSize.x = 640;
-            (*info).ptMinTrackSize.y = 480;
+            let info = &mut *(lparam as *mut MINMAXINFO);
+            info.ptMinTrackSize.x = 640;
+            info.ptMinTrackSize.y = 480;
         }
         WM_MOUSEMOVE => handle_event(Event::MouseMoved(LOWORD(lparam as u32) as u32, HIWORD(lparam as u32) as u32)),
         WM_LBUTTONDOWN => handle_event(Event::MousePressed(MouseButton::Left)),
@@ -193,16 +189,10 @@ unsafe extern "system" fn wnd_proc(hwnd: HWND, msg: UINT, wparam: WPARAM, lparam
         WM_RBUTTONUP => handle_event(Event::MouseReleased(MouseButton::Right)),
         WM_MBUTTONDOWN => handle_event(Event::MousePressed(MouseButton::Middle)),
         WM_MBUTTONUP => handle_event(Event::MouseReleased(MouseButton::Middle)),
-        WM_XBUTTONDOWN => handle_event(Event::MousePressed(if HIWORD(wparam as u32) == XBUTTON1 {
-            MouseButton::XButton1
-        } else {
-            MouseButton::XButton2
-        })),
-        WM_XBUTTONUP => handle_event(Event::MouseReleased(if HIWORD(wparam as u32) == XBUTTON1 {
-            MouseButton::XButton1
-        } else {
-            MouseButton::XButton2
-        })),
+        WM_XBUTTONDOWN if HIWORD(wparam as u32) == XBUTTON1 => handle_event(Event::MousePressed(MouseButton::XButton1)),
+        WM_XBUTTONDOWN if HIWORD(wparam as u32) == XBUTTON2 => handle_event(Event::MousePressed(MouseButton::XButton2)),
+        WM_XBUTTONUP if HIWORD(wparam as u32) == XBUTTON1 => handle_event(Event::MouseReleased(MouseButton::XButton1)),
+        WM_XBUTTONUP if HIWORD(wparam as u32) == XBUTTON2 => handle_event(Event::MouseReleased(MouseButton::XButton2)),
         WM_MOUSEWHEEL => handle_event(Event::MouseWheel((GET_WHEEL_DELTA_WPARAM(wparam) / WHEEL_DELTA) as i32)),
         WM_CHAR => {
             if let Some(character) = char::from_u32(wparam as u32) {
