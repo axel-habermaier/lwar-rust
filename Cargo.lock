@@ -3,6 +3,14 @@
 version = 3
 
 [[package]]
+name = "lwar"
+version = "0.1.0"
+dependencies = [
+ "num_enum",
+ "winapi",
+]
+
+[[package]]
 name = "num_enum"
 version = "0.5.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -21,14 +29,6 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn",
-]
-
-[[package]]
-name = "orbs"
-version = "0.1.0"
-dependencies = [
- "num_enum",
- "winapi",
 ]
 
 [[package]]

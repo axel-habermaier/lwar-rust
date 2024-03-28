@@ -12,7 +12,7 @@ use winapi::{
     um::{libloaderapi::GetModuleHandleA, winuser::*},
 };
 
-const WINDOW_TITLE: *const i8 = b"Orbs\0".as_ptr() as *const i8;
+const WINDOW_TITLE: *const i8 = b"lwar\0".as_ptr() as *const i8;
 
 pub struct Window {
     hwnd: HWND,

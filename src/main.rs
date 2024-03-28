@@ -1,9 +1,9 @@
 #![warn(clippy::all)]
 #![windows_subsystem = "windows"]
 
-use orbs::platform::error::on_panic;
-use orbs::platform::graphics::report_d3d11_leaks;
-use orbs::platform::show_message_box;
+use lwar::platform::error::on_panic;
+use lwar::platform::graphics::report_d3d11_leaks;
+use lwar::platform::show_message_box;
 use std::process::exit;
 
 fn main() {
@@ -13,7 +13,7 @@ fn main() {
         ));
     });
 
-    orbs::run();
+    lwar::run();
 
     report_d3d11_leaks();
     exit(0);

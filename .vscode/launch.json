@@ -8,7 +8,7 @@
             "name": "(Windows) Launch",
             "type": "cppvsdbg",
             "request": "launch",
-            "program": "${workspaceFolder}/target/debug/orbs.exe",
+            "program": "${workspaceFolder}/target/debug/lwar.exe",
             "stopAtEntry": false,
             "cwd": "${workspaceFolder}",
             "environment": [],
